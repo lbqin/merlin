@@ -1,3 +1,5 @@
+#! /usr/bin/env python2.7
+#coding=utf-8
 ################################################################################
 #           The Neural Network (NN) based Speech Synthesis System
 #                https://svn.ecdf.ed.ac.uk/repo/inf/dnn_tts/
@@ -150,10 +152,10 @@ class   AcousticBase(object):
                         step = (data[j] - data[i-1]) / float(j - i)
                         for k in range(i, j):
                             ip_data[k] = data[i-1] + step * (k - i + 1)
-                    else:
+                    else: #句首
                         for k in range(i, j):
                             ip_data[k] = data[j]
-                else:
+                else: #句末
                     for k in range(i, frame_number):
                         ip_data[k] = last_value
             else:

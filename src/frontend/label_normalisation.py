@@ -1,4 +1,5 @@
-
+#! /usr/bin/env python2.7
+#coding=utf-8
 import os
 import numpy, re, sys
 from multiprocessing import Pool
@@ -228,7 +229,7 @@ class HTSLabelNormalisation(LabelNormalisation):
                     sys.exit(1)
             elif feature_type == "numerical":
                 if unit_size == "state":
-                    current_dur_array[current_index%5] = frame_number 
+                    current_dur_array[current_index%5] = frame_number #current_dur_array保存该音素5个状态的分别有多少帧
                     if feat_size == "phoneme" and state_index == state_number:
                         current_block_array =  current_dur_array.transpose() 
                     if feat_size == "frame":

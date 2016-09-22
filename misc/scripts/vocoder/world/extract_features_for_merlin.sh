@@ -1,17 +1,17 @@
 #!/bin/sh
 
 # top merlin directory
-merlin_dir="/afs/inf.ed.ac.uk/group/cstr/projects/phd/s1432486/work/test/merlin"
+merlin_dir="/Users/sooda/speech/merlin"
 
 # tools directory
 world="${merlin_dir}/tools/WORLD/build"
 sptk="${merlin_dir}/tools/SPTK-3.7/bin"
 
 # input audio directory
-wav_dir="${merlin_dir}/dnn_baseline_practice/cmu_us_slt_arctic/wav"
+wav_dir="${merlin_dir}/egs/labixx/s1/labixx_data/wav"
 
 # Output features directory
-out_dir="${merlin_dir}/dnn_baseline_practice/cmu_us_slt_arctic/data"
+out_dir="${merlin_dir}/egs/labixx/s1/labixx_data/data"
 
 sp_dir="${out_dir}/sp"
 mgc_dir="${out_dir}/mgc"
@@ -28,7 +28,7 @@ mkdir -p ${f0_dir}
 mkdir -p ${lf0_dir}
 
 # initializations
-fs=16000
+fs=48000
 
 if [ "$fs" -eq 16000 ]
 then

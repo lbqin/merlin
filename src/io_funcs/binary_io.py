@@ -60,6 +60,15 @@ class   BinaryIOCollection(object):
         data.tofile(fid)
         fid.close()
 
+    def matrix2file(self, data, output_file_name):
+        fid = open(output_file_name, 'w')
+        row = data.shape[0]
+        col = data.shape[1]
+        for i in xrange(row):
+            for j in xrange(col):
+                fid.write(str(data[i, j]) + " ")
+            fid.write("\n")
+
     def load_binary_file_frame(self, file_name, dimension):
         fid_lab = open(file_name, 'rb')
         features = numpy.fromfile(fid_lab, dtype=numpy.float32)
@@ -70,4 +79,41 @@ class   BinaryIOCollection(object):
         features = features.reshape((-1, dimension))
             
         return  features, frame_number
+
+    def load_file_frame(self, file_name, dimension):
+        fid_lab = open(file_name, 'r')
+        features = numpy.fromfile(fid_lab, dtype=numpy.float32, sep=' ')
+        fid_lab.close()
+        assert features.size % float(dimension) == 0.0, 'specified dimension %s not compatible with data' % (dimension)
+        frame_number = features.size / dimension
+        features = features[:(dimension * frame_number)]
+        features = features.reshape((-1, dimension))
+
+        return features, frame_number
+
+    def load_file(self, file_name, dimension):
+        fid_lab = open(file_name, 'r')
+        features = numpy.fromfile(fid_lab, dtype=numpy.float32, sep=' ')
+        fid_lab.close()
+        assert features.size % float(dimension) == 0.0, 'specified dimension %s not compatible with data' % (dimension)
+        features = features[:(dimension * (features.size / dimension))]
+        features = features.reshape((-1, dimension))
+
+        return features
+
+    # load the readable text feature from file
+    def file2matrix(self, filename, numtype=numpy.float32):
+        fr = open(filename)
+        arrayOLines = fr.readlines()
+        numberOfLines = len(arrayOLines)  # get the number of lines in the file
+        length = len(arrayOLines[0].split())
+        #returnMat = numpy.zeros((numberOfLines, length), dtype=numpy.int)  # prepare matrix to return
+        returnMat = numpy.zeros((numberOfLines, length), dtype=numtype)  # prepare matrix to return
+        index = 0
+        for line in arrayOLines:
+            line = line.strip()
+            listFromLine = line.split(' ')
+            returnMat[index, :] = listFromLine[:]
+            index += 1
+        return returnMat
 

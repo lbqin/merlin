@@ -789,6 +789,10 @@ class configuration(object):
         elif self.label_style == 'composed':
             self.question_file_name=None
 
+        elif self.label_style == 'cppmary':
+            self.xpath_file_name = None
+            self.question_file_name = None
+
         else:
             logger.critical('unsupported label style requested: %s' % self.label_style)
             raise Exception
