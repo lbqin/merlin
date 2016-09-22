@@ -52,6 +52,7 @@ from logplot.logging_plotting import LoggerPlotter, MultipleSeriesPlot, SingleWe
 import logging # as logging
 import logging.config
 import StringIO
+import random
 
 
 def extract_file_id_list(file_list):
@@ -466,7 +467,10 @@ def main_function(cfg):
         # this means that open(...) threw an error
         logger.critical('Could not load file id list from %s' % cfg.file_id_scp)
         raise
-    
+
+
+    random.shuffle(file_id_list)
+
     ###total file number including training, development, and testing
     total_file_number = len(file_id_list)
     
@@ -493,18 +497,11 @@ def main_function(cfg):
     # currently supporting two different forms of lingustic features
     # later, we should generalise this 
 
-    if cfg.label_style == 'HTS':
-        label_normaliser = HTSLabelNormalisation(question_file_name=cfg.question_file_name, add_frame_features=cfg.add_frame_features, subphone_feats=cfg.subphone_feats)
-        lab_dim = label_normaliser.dimension + cfg.appended_input_dim
-        logger.info('Input label dimension is %d' % lab_dim)
-        suffix=str(lab_dim)
-    # no longer supported - use new "composed" style labels instead
-    elif cfg.label_style == 'composed':
-        # label_normaliser = XMLLabelNormalisation(xpath_file_name=cfg.xpath_file_name)
-        suffix='composed'
-    elif cfg.label_style == 'cppmary':
+    if cfg.label_style == 'cppmary':
         suffix = 'cppmary'
         lab_dim = 500
+    else:
+        raise
 
     if cfg.process_labels_in_work_dir:
         label_data_dir = cfg.work_dir
@@ -517,15 +514,12 @@ def main_function(cfg):
     nn_label_norm_dir     = os.path.join(label_data_dir, 'nn_no_silence_lab_norm_'+suffix)
 
     in_label_align_file_list = prepare_file_path_list(file_id_list, cfg.in_label_align_dir, cfg.lab_ext, False)
-    binary_label_file_list   = prepare_file_path_list(file_id_list, binary_label_dir, cfg.lab_ext)
     nn_label_file_list       = prepare_file_path_list(file_id_list, nn_label_dir, cfg.lab_ext)
     nn_label_norm_file_list  = prepare_file_path_list(file_id_list, nn_label_norm_dir, cfg.lab_ext)
     dur_file_list            = prepare_file_path_list(file_id_list, cfg.in_dur_dir, cfg.dur_ext)
     lf0_file_list            = prepare_file_path_list(file_id_list, cfg.in_lf0_dir, cfg.lf0_ext)
     
     # to do - sanity check the label dimension here?
-    
-    
     
     min_max_normaliser = None
     label_norm_file = 'label_norm_%s_%d.dat' %(cfg.label_style, lab_dim)
@@ -541,29 +535,8 @@ def main_function(cfg):
             raise
 
         in_label_align_file_list = prepare_file_path_list(test_id_list, cfg.in_label_align_dir, cfg.lab_ext, False)
-        binary_label_file_list   = prepare_file_path_list(test_id_list, binary_label_dir, cfg.lab_ext)
         nn_label_file_list       = prepare_file_path_list(test_id_list, nn_label_dir, cfg.lab_ext)
         nn_label_norm_file_list  = prepare_file_path_list(test_id_list, nn_label_norm_dir, cfg.lab_ext)
-
-    if cfg.NORMLAB and (cfg.label_style == 'HTS'):
-        # simple HTS labels 
-    	logger.info('preparing label data (input) using standard HTS style labels')
-        label_normaliser.perform_normalisation(in_label_align_file_list, binary_label_file_list, label_type=cfg.label_type) #one hot 特征保存在binary_label_file_list里面
-
-        remover = SilenceRemover(n_cmp = lab_dim, silence_pattern = cfg.silence_pattern, label_type=cfg.label_type, remove_frame_features = cfg.add_frame_features, subphone_feats = cfg.subphone_feats)
-        remover.remove_silence(binary_label_file_list, in_label_align_file_list, nn_label_file_list)  #根据in_label_align_file_list里的对齐信息，去除空音所在的帧数据
-
-        min_max_normaliser = MinMaxNormalisation(feature_dimension = lab_dim, min_value = 0.01, max_value = 0.99)
-        ###use only training data to find min-max information, then apply on the whole dataset
-        if cfg.GenTestList:
-            min_max_normaliser.load_min_max_values(label_norm_file)
-        else:
-            min_max_normaliser.find_min_max_values(nn_label_file_list[0:cfg.train_file_number])
-        ### enforce silence such that the normalization runs without removing silence: only for final synthesis
-        if cfg.GenTestList and cfg.enforce_silence:
-            min_max_normaliser.normalise_data(binary_label_file_list, nn_label_norm_file_list)
-        else:
-            min_max_normaliser.normalise_data(nn_label_file_list, nn_label_norm_file_list)
 
     if cfg.NORMLAB and (cfg.label_style == 'cppmary'):
         # simple HTS labels
@@ -586,84 +559,6 @@ def main_function(cfg):
         # if cfg.GenTestList and cfg.enforce_silence:
         #     min_max_normaliser.normalise_data(binary_label_file_list, nn_label_norm_file_list)
         # else:
-            min_max_normaliser.normalise_data(nn_label_file_list, nn_label_norm_file_list)
-
-
-    if cfg.NORMLAB and (cfg.label_style == 'composed'):
-        # new flexible label preprocessor
-        
-    	logger.info('preparing label data (input) using "composed" style labels')
-        label_composer = LabelComposer()
-        label_composer.load_label_configuration(cfg.label_config_file)
-    
-        logger.info('Loaded label configuration')
-        # logger.info('%s' % label_composer.configuration.labels )
-
-        lab_dim=label_composer.compute_label_dimension()
-        logger.info('label dimension will be %d' % lab_dim)
-        
-        if cfg.precompile_xpaths:
-            label_composer.precompile_xpaths()
-        
-        # there are now a set of parallel input label files (e.g, one set of HTS and another set of Ossian trees)
-        # create all the lists of these, ready to pass to the label composer
-
-        in_label_align_file_list = {}
-        for label_style, label_style_required in label_composer.label_styles.iteritems():
-            if label_style_required:
-                logger.info('labels of style %s are required - constructing file paths for them' % label_style)
-                if label_style == 'xpath':
-                    in_label_align_file_list['xpath'] = prepare_file_path_list(file_id_list, cfg.xpath_label_align_dir, cfg.utt_ext, False)
-                elif label_style == 'hts':
-                    in_label_align_file_list['hts'] = prepare_file_path_list(file_id_list, cfg.hts_label_align_dir, cfg.lab_ext, False)
-                else:
-                    logger.critical('unsupported label style %s specified in label configuration' % label_style)
-                    raise Exception
-        
-            # now iterate through the files, one at a time, constructing the labels for them 
-            num_files=len(file_id_list)
-            logger.info('the label styles required are %s' % label_composer.label_styles)
-            
-            for i in xrange(num_files):
-                logger.info('making input label features for %4d of %4d' % (i+1,num_files))
-
-                # iterate through the required label styles and open each corresponding label file
-
-                # a dictionary of file descriptors, pointing at the required files
-                required_labels={}
-                
-                for label_style, label_style_required in label_composer.label_styles.iteritems():
-                    
-                    # the files will be a parallel set of files for a single utterance
-                    # e.g., the XML tree and an HTS label file
-                    if label_style_required:
-                        required_labels[label_style] = open(in_label_align_file_list[label_style][i] , 'r')
-                        logger.debug(' opening label file %s' % in_label_align_file_list[label_style][i])
-
-                logger.debug('label styles with open files: %s' % required_labels)
-                label_composer.make_labels(required_labels,out_file_name=binary_label_file_list[i],fill_missing_values=cfg.fill_missing_values,iterate_over_frames=cfg.iterate_over_frames)
-                    
-                # now close all opened files
-                for fd in required_labels.itervalues():
-                    fd.close()
-        
-        
-        # silence removal
-        if cfg.remove_silence_using_binary_labels:
-            silence_feature = 0 ## use first feature in label -- hardcoded for now
-            logger.info('Silence removal from label using silence feature: %s'%(label_composer.configuration.labels[silence_feature]))
-            logger.info('Silence will be removed from CMP files in same way')
-            ## Binary labels have 2 roles: both the thing trimmed and the instructions for trimming: 
-            trim_silence(binary_label_file_list, nn_label_file_list, lab_dim, \
-                                binary_label_file_list, lab_dim, silence_feature)
-        else:
-            logger.info('No silence removal done')
-            # start from the labels we have just produced, not trimmed versions
-            nn_label_file_list = binary_label_file_list
-        
-        min_max_normaliser = MinMaxNormalisation(feature_dimension = lab_dim, min_value = 0.01, max_value = 0.99)
-        ###use only training data to find min-max information, then apply on the whole dataset
-        min_max_normaliser.find_min_max_values(nn_label_file_list[0:cfg.train_file_number])
         min_max_normaliser.normalise_data(nn_label_file_list, nn_label_norm_file_list)
 
     if min_max_normaliser != None and not cfg.GenTestList:
@@ -686,9 +581,7 @@ def main_function(cfg):
             label_cppmary.prepare_dur_feature(in_label_align_file_list, dur_file_list)
         else:
             logger.info('creating duration (output) features')
-            label_type = cfg.label_type
-            feature_type = cfg.dur_feature_type
-            label_normaliser.prepare_dur_data(in_label_align_file_list, dur_file_list, label_type, feature_type) # 提取声学模型的五维数据
+            raise
 
 
     ### make output acoustic data
@@ -701,25 +594,6 @@ def main_function(cfg):
         if 'dur' in cfg.in_dir_dict.keys() and cfg.AcousticModel:
             acoustic_worker.make_equal_frames(dur_file_list, lf0_file_list, cfg.in_dimension_dict)
         acoustic_worker.prepare_nn_data(in_file_list_dict, nn_cmp_file_list, cfg.in_dimension_dict, cfg.out_dimension_dict)
-
-        # if cfg.remove_silence_using_binary_labels:
-        #     ## do this to get lab_dim:
-        #     label_composer = LabelComposer()
-        #     label_composer.load_label_configuration(cfg.label_config_file)
-        #     lab_dim=label_composer.compute_label_dimension()
-        #
-        #     silence_feature = 0 ## use first feature in label -- hardcoded for now
-        #     logger.info('Silence removal from CMP using binary label file')
-        #
-        #     ## overwrite the untrimmed audio with the trimmed version:
-        #     trim_silence(nn_cmp_file_list, nn_cmp_file_list, cfg.cmp_dim,
-        #                         binary_label_file_list, lab_dim, silence_feature)
-        #
-        # else: ## back off to previous method using HTS labels:
-        #     remover = SilenceRemover(n_cmp = cfg.cmp_dim, silence_pattern = cfg.silence_pattern, label_type=cfg.label_type, remove_frame_features = cfg.add_frame_features, subphone_feats = cfg.subphone_feats)
-        #     remover.remove_silence(nn_cmp_file_list[0:cfg.train_file_number+cfg.valid_file_number],
-        #                            in_label_align_file_list[0:cfg.train_file_number+cfg.valid_file_number],
-        #                            nn_cmp_file_list[0:cfg.train_file_number+cfg.valid_file_number]) # save to itself
 
     ### save acoustic normalisation information for normalising the features back
     var_dir   = os.path.join(data_dir, 'var')
@@ -782,26 +656,35 @@ def main_function(cfg):
 
     train_x_file_list = nn_label_norm_file_list[0:cfg.train_file_number]
     train_y_file_list = nn_cmp_norm_file_list[0:cfg.train_file_number]
-    valid_x_file_list = nn_label_norm_file_list[cfg.train_file_number:cfg.train_file_number+cfg.valid_file_number]    
+    valid_x_file_list = nn_label_norm_file_list[cfg.train_file_number:cfg.train_file_number+cfg.valid_file_number]
     valid_y_file_list = nn_cmp_norm_file_list[cfg.train_file_number:cfg.train_file_number+cfg.valid_file_number]
-    test_x_file_list  = nn_label_norm_file_list[cfg.train_file_number+cfg.valid_file_number:cfg.train_file_number+cfg.valid_file_number+cfg.test_file_number]    
-    test_y_file_list  = nn_cmp_norm_file_list[cfg.train_file_number+cfg.valid_file_number:cfg.train_file_number+cfg.valid_file_number+cfg.test_file_number]
+    gen_file_id_list = file_id_list[cfg.train_file_number:cfg.train_file_number+cfg.valid_file_number]
+    test_x_file_list  = nn_label_norm_file_list[cfg.train_file_number:cfg.train_file_number+cfg.valid_file_number]
+
+    # total_index = range(len(nn_label_norm_file_list))
+    # test_portion = 0.1
+    # valid_portion = 0.1
+    # test_index = sorted(random.sample(total_index, int(test_portion * len(nn_label_norm_file_list))))
+    # train_vilid_index = list(set(total_index) ^ set(test_index))
+    # valid_index = sorted(random.sample(train_vilid_index, int(valid_portion * len(nn_label_norm_file_list))))
+    # train_index = list(set(train_vilid_index) ^ set(valid_index))
+    #
+    # train_x_file_list = [nn_label_norm_file_list[index] for index in train_index]
+    # train_y_file_list = [nn_cmp_norm_file_list[index] for index in train_index]
+    # valid_x_file_list = [nn_label_norm_file_list[index] for index in valid_index]
+    # valid_y_file_list = [nn_cmp_norm_file_list[index] for index in valid_index]
+    # gen_file_id_list = [file_id_list[index] for index in test_index]
+    # test_x_file_list = [nn_label_norm_file_list[index] for index in test_index]
 
 
     # we need to know the label dimension before training the DNN
     # computing that requires us to look at the labels
     #
     # currently, there are two ways to do this
-    if cfg.label_style == 'HTS':
-        label_normaliser = HTSLabelNormalisation(question_file_name=cfg.question_file_name, add_frame_features=cfg.add_frame_features, subphone_feats=cfg.subphone_feats)
-        lab_dim = label_normaliser.dimension + cfg.appended_input_dim
-
-    elif cfg.label_style == 'composed':
-        label_composer = LabelComposer()
-        label_composer.load_label_configuration(cfg.label_config_file)
-        lab_dim=label_composer.compute_label_dimension()
-    elif cfg.label_style == 'cppmary':
+    if cfg.label_style == 'cppmary':
         lab_dim = label_cppmary.label_dimension
+    else:
+        raise
 
     logger.info('label dimension is %d' % lab_dim)
 
@@ -856,53 +739,12 @@ def main_function(cfg):
             logger.critical('train_DNN threw an exception')
             raise
             
-    
-    
-    if cfg.GENBNFEA:
-        '''
-        Please only tune on this step when you want to generate bottleneck features from DNN
-        '''
-        temp_dir_name = '%s_%s_%d_%d_%d_%d_%s_hidden' \
-                        %(cfg.model_type, cfg.combined_feature_name, \
-                          cfg.train_file_number, lab_dim, cfg.cmp_dim, \
-                          len(hidden_layers_sizes), combined_model_arch)
-        gen_dir = os.path.join(gen_dir, temp_dir_name)
-
-        bottleneck_size = min(hidden_layers_sizes)
-        bottleneck_index = 0
-        for i in xrange(len(hidden_layers_sizes)):
-            if hidden_layers_sizes(i) == bottleneck_size:
-                bottleneck_index = i
-
-    	logger.info('generating bottleneck features from DNN')
-
-        try:
-            os.makedirs(gen_dir)
-        except OSError as e:
-            if e.errno == errno.EEXIST:
-                # not an error - just means directory already exists
-                pass
-            else:
-                logger.critical('Failed to create generation directory %s' % gen_dir)
-                logger.critical(' OS error was: %s' % e.strerror)
-                raise
-
-        gen_file_id_list = file_id_list[0:cfg.train_file_number+cfg.valid_file_number+cfg.test_file_number]
-        test_x_file_list  = nn_label_norm_file_list[0:cfg.train_file_number+cfg.valid_file_number+cfg.test_file_number]    
-
-        gen_file_list = prepare_file_path_list(gen_file_id_list, gen_dir, cfg.cmp_ext)
-    
-        dnn_hidden_generation(test_x_file_list, nnets_file_name, lab_dim, cfg.cmp_dim, gen_file_list, bottleneck_index)
-            
     ### generate parameters from DNN
     temp_dir_name = '%s_%s_%d_%d_%d_%d_%d_%d_%d' \
                     %(cfg.combined_model_name, cfg.combined_feature_name, int(cfg.do_post_filtering), \
                       cfg.train_file_number, lab_dim, cfg.cmp_dim, \
                       len(hidden_layer_size), hidden_layer_size[0], hidden_layer_size[-1])
     gen_dir = os.path.join(gen_dir, temp_dir_name)
-
-    gen_file_id_list = file_id_list[cfg.train_file_number:cfg.train_file_number+cfg.valid_file_number+cfg.test_file_number]
-    test_x_file_list  = nn_label_norm_file_list[cfg.train_file_number:cfg.train_file_number+cfg.valid_file_number+cfg.test_file_number]    
 
     if cfg.GenTestList:
         gen_file_id_list = test_id_list
@@ -964,7 +806,6 @@ def main_function(cfg):
 
             label_cppmary.prepare_predict_label(in_gen_label_align_file_list, gen_label_list, gen_dur_list)
 
-            
 
     ### generate wav
     if cfg.GENWAV:
@@ -973,11 +814,7 @@ def main_function(cfg):
 #    	generate_wav(nn_cmp_dir, gen_file_id_list, cfg)  # reference copy synthesis speech
 
 
-
-        
 if __name__ == '__main__':
-    
-    
     
     # these things should be done even before trying to parse the command line
 
