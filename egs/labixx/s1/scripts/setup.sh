@@ -20,6 +20,7 @@ mkdir -p ${experiments_dir}
 mkdir -p ${voice_dir}
 mkdir -p ${acoustic_dir}
 mkdir -p ${duration_dir}
+mkdir -p ${synthesis_dir}
 
 if [ "$voice_name" == "labixx" ]
 then
