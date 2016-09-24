@@ -30,7 +30,7 @@ else
     exit 1
 fi
 
-if [[ -d ${data_dir} ]]; then
+if [[ ! -d ${acoustic_dir}/data ]]; then
     # extract the feature
     cp -r ${data_dir}/acoustic_data ${acoustic_dir}/data
     cp -r ${data_dir}/data/* ${acoustic_dir}/data
@@ -53,9 +53,9 @@ echo "SamplingFreq=48000" >> $global_config_file
 if [ "$voice_name" == "labixx" ]
 then
     echo "FileIDList=basename.scp" >> $global_config_file
-    echo "Train=100" >> $global_config_file 
-    echo "Valid=10" >> $global_config_file 
-    echo "Test=10" >> $global_config_file 
+    echo "Train=2450" >> $global_config_file 
+    echo "Valid=200" >> $global_config_file 
+    echo "Test=20" >> $global_config_file 
 else
     echo "The data for voice name ($voice_name) is not available...please use labixx !!"
     exit 1

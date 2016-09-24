@@ -1,17 +1,17 @@
 #!/bin/sh
 
 # top merlin directory
-merlin_dir="/Users/sooda/speech/merlin"
+merlin_dir="/home/sooda/speech/merlin"
 
 # tools directory
 world="${merlin_dir}/tools/WORLD/build"
 sptk="${merlin_dir}/tools/SPTK-3.7/bin"
 
 # input audio directory
-wav_dir="${merlin_dir}/egs/labixx/s1/labixx_data/wav"
+wav_dir="/home/sooda/data/tts/xll800_800_48k/wav"
 
 # Output features directory
-out_dir="${merlin_dir}/egs/labixx/s1/labixx_data/data"
+out_dir="${merlin_dir}/egs/xll/s1/xll_data/acoustic_data"
 
 sp_dir="${out_dir}/sp"
 mgc_dir="${out_dir}/mgc"

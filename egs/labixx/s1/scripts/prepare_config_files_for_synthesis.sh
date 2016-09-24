@@ -99,7 +99,7 @@ echo "test_synth_dir :  %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/gen-lab
 echo "" >> $duration_config_file
 echo "[Architecture]" >> $duration_config_file
 
-if [ "$Voice" == "labixx" ]
+if [ "$Voice" == "labixx1" ]
 then
     echo "hidden_layer_size  : [512, 512, 512, 512]" >> $duration_config_file
     echo "hidden_layer_type  : ['TANH', 'TANH', 'TANH', 'TANH']" >> $duration_config_file
@@ -305,7 +305,7 @@ fi
 echo "" >> $acoustic_config_file
 echo "[Architecture]" >> $acoustic_config_file
 
-if [ "$Voice" == "labixx" ]
+if [ "$Voice" == "labixx1" ]
 then
     echo "hidden_layer_size  : [512, 512, 512, 512]" >> $acoustic_config_file
     echo "hidden_layer_type  : ['TANH', 'TANH', 'TANH', 'TANH']" >> $acoustic_config_file
