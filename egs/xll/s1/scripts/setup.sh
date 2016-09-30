@@ -22,9 +22,9 @@ mkdir -p ${acoustic_dir}
 mkdir -p ${duration_dir}
 mkdir -p ${synthesis_dir}
 
-if [ "$voice_name" == "labixx" ]
+if [ "$voice_name" == "xll" ]
 then
-    data_dir=labixx_data
+    data_dir=xll_data
 else
     echo "The data for voice name ($voice_name) is not available...please use labixx!!"
     exit 1
@@ -50,11 +50,11 @@ echo "Labels=state_align" >> $global_config_file
 echo "Vocoder=WORLD" >> $global_config_file
 echo "SamplingFreq=48000" >> $global_config_file
 
-if [ "$voice_name" == "labixx" ]
+if [ "$voice_name" == "xll" ]
 then
     echo "FileIDList=basename.scp" >> $global_config_file
-    echo "Train=4150" >> $global_config_file 
-    echo "Valid=400" >> $global_config_file 
+    echo "Train=3300" >> $global_config_file 
+    echo "Valid=300" >> $global_config_file 
     echo "Test=20" >> $global_config_file 
 else
     echo "The data for voice name ($voice_name) is not available...please use labixx !!"

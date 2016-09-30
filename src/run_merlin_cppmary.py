@@ -499,7 +499,7 @@ def main_function(cfg):
 
     if cfg.label_style == 'cppmary':
         suffix = 'cppmary'
-        lab_dim = 500
+        lab_dim = 546
     else:
         raise
 
@@ -547,118 +547,114 @@ def main_function(cfg):
     for feature_name in cfg.out_dimension_dict.keys():
         var_file_dict[feature_name] = os.path.join(var_dir, feature_name + '_' + str(cfg.out_dimension_dict[feature_name]))
 
-    data_prepare = True
 
-    if data_prepare:
-        if cfg.NORMLAB and (cfg.label_style == 'cppmary'):
-            # simple HTS labels
-            logger.info('preparing label data (input) using cppmary style labels')
-            label_cppmary = LabelCppmary()
-            if cfg.add_frame_features :
-                label_cppmary.prepare_acoustic_label_feature(in_label_align_file_list, nn_label_file_list)
-            else:
-                label_cppmary.prepare_label_feature(in_label_align_file_list, nn_label_file_list)
+    if cfg.NORMLAB and (cfg.label_style == 'cppmary'):
+        # simple HTS labels
+        logger.info('preparing label data (input) using cppmary style labels')
+        label_cppmary = LabelCppmary()
+        if cfg.add_frame_features :
+            label_cppmary.prepare_acoustic_label_feature(in_label_align_file_list, nn_label_file_list)
+        else:
+            label_cppmary.prepare_label_feature(in_label_align_file_list, nn_label_file_list)
 
-            lab_dim = label_cppmary.label_dimension
+        lab_dim = label_cppmary.label_dimension
 
-            min_max_normaliser = MinMaxNormalisation(feature_dimension = lab_dim, min_value = 0.01, max_value = 0.99)
-            ###use only training data to find min-max information, then apply on the whole dataset
-            if cfg.GenTestList:
-                min_max_normaliser.load_min_max_values(label_norm_file)
-            else:
-                min_max_normaliser.find_min_max_values(nn_label_file_list[0:cfg.train_file_number])
-            ### enforce silence such that the normalization runs without removing silence: only for final synthesis
-            # if cfg.GenTestList and cfg.enforce_silence:
-            #     min_max_normaliser.normalise_data(binary_label_file_list, nn_label_norm_file_list)
-            # else:
-            min_max_normaliser.normalise_data(nn_label_file_list, nn_label_norm_file_list)
+        min_max_normaliser = MinMaxNormalisation(feature_dimension = lab_dim, min_value = 0.01, max_value = 0.99)
+        ###use only training data to find min-max information, then apply on the whole dataset
+        if cfg.GenTestList:
+            min_max_normaliser.load_min_max_values(label_norm_file)
+        else:
+            min_max_normaliser.find_min_max_values(nn_label_file_list[0:cfg.train_file_number])
+        ### enforce silence such that the normalization runs without removing silence: only for final synthesis
+        # if cfg.GenTestList and cfg.enforce_silence:
+        #     min_max_normaliser.normalise_data(binary_label_file_list, nn_label_norm_file_list)
+        # else:
+        min_max_normaliser.normalise_data(nn_label_file_list, nn_label_norm_file_list)
 
-        if min_max_normaliser != None and not cfg.GenTestList:
-            ### save label normalisation information for unseen testing labels
-            label_min_vector = min_max_normaliser.min_vector
-            label_max_vector = min_max_normaliser.max_vector
-            label_norm_info = numpy.concatenate((label_min_vector, label_max_vector), axis=0)
+    if min_max_normaliser != None and not cfg.GenTestList:
+        ### save label normalisation information for unseen testing labels
+        label_min_vector = min_max_normaliser.min_vector
+        label_max_vector = min_max_normaliser.max_vector
+        label_norm_info = numpy.concatenate((label_min_vector, label_max_vector), axis=0)
 
-            label_norm_info = numpy.array(label_norm_info, 'float32')
-            fid = open(label_norm_file, 'wb')
-            label_norm_info.tofile(fid)
+        label_norm_info = numpy.array(label_norm_info, 'float32')
+        fid = open(label_norm_file, 'wb')
+        label_norm_info.tofile(fid)
+        fid.close()
+        logger.info('saved %s vectors to %s' %(label_min_vector.size, label_norm_file))
+
+
+    ### make output duration data
+    if cfg.MAKEDUR:
+        if cfg.label_style == 'cppmary':
+            logger.info('creating cppmary duration (output) features')
+            label_cppmary.prepare_dur_feature(in_label_align_file_list, dur_file_list)
+        else:
+            logger.info('creating duration (output) features')
+            raise
+
+
+    ### make output acoustic data
+    if cfg.MAKECMP: #如果有多个数据流则合并，并计算delta，delta-delta
+        logger.info('creating acoustic (output) features')
+        delta_win = cfg.delta_win #[-0.5, 0.0, 0.5]
+        acc_win = cfg.acc_win     #[1.0, -2.0, 1.0]
+
+        acoustic_worker = AcousticComposition(delta_win = delta_win, acc_win = acc_win)
+        if 'dur' in cfg.in_dir_dict.keys() and cfg.AcousticModel:
+            acoustic_worker.make_equal_frames(dur_file_list, lf0_file_list, cfg.in_dimension_dict)
+        acoustic_worker.prepare_nn_data(in_file_list_dict, nn_cmp_file_list, cfg.in_dimension_dict, cfg.out_dimension_dict)
+
+
+    ### normalise output acoustic data
+    if cfg.NORMCMP:
+        logger.info('normalising acoustic (output) features using method %s' % cfg.output_feature_normalisation)
+        cmp_norm_info = None
+        if cfg.output_feature_normalisation == 'MVN':
+            normaliser = MeanVarianceNorm(feature_dimension=cfg.cmp_dim)
+            ###calculate mean and std vectors on the training data, and apply on the whole dataset
+            global_mean_vector = normaliser.compute_mean(nn_cmp_file_list[0:cfg.train_file_number], 0, cfg.cmp_dim)
+            global_std_vector = normaliser.compute_std(nn_cmp_file_list[0:cfg.train_file_number], global_mean_vector, 0, cfg.cmp_dim)
+
+            normaliser.feature_normalisation(nn_cmp_file_list[0:cfg.train_file_number+cfg.valid_file_number],
+                                             nn_cmp_norm_file_list[0:cfg.train_file_number+cfg.valid_file_number])
+            cmp_norm_info = numpy.concatenate((global_mean_vector, global_std_vector), axis=0)
+
+        elif cfg.output_feature_normalisation == 'MINMAX':
+            min_max_normaliser = MinMaxNormalisation(feature_dimension = cfg.cmp_dim)
+            global_mean_vector = min_max_normaliser.compute_mean(nn_cmp_file_list[0:cfg.train_file_number])
+            global_std_vector = min_max_normaliser.compute_std(nn_cmp_file_list[0:cfg.train_file_number], global_mean_vector)
+
+            min_max_normaliser = MinMaxNormalisation(feature_dimension = cfg.cmp_dim, min_value = 0.01, max_value = 0.99)
+            min_max_normaliser.find_min_max_values(nn_cmp_file_list[0:cfg.train_file_number])
+            min_max_normaliser.normalise_data(nn_cmp_file_list, nn_cmp_norm_file_list)
+
+            cmp_min_vector = min_max_normaliser.min_vector
+            cmp_max_vector = min_max_normaliser.max_vector
+            cmp_norm_info = numpy.concatenate((cmp_min_vector, cmp_max_vector), axis=0)
+
+        else:
+            logger.critical('Normalisation type %s is not supported!\n' %(cfg.output_feature_normalisation))
+            raise
+
+        cmp_norm_info = numpy.array(cmp_norm_info, 'float32')
+        fid = open(norm_info_file, 'wb')
+        cmp_norm_info.tofile(fid)
+        fid.close()
+        logger.info('saved %s vectors to %s' %(cfg.output_feature_normalisation, norm_info_file))
+
+        feature_index = 0
+        for feature_name in cfg.out_dimension_dict.keys():
+            feature_std_vector = numpy.array(global_std_vector[:,feature_index:feature_index+cfg.out_dimension_dict[feature_name]], 'float32')
+
+            fid = open(var_file_dict[feature_name], 'w')
+            feature_var_vector = feature_std_vector**2
+            feature_var_vector.tofile(fid)
             fid.close()
-            logger.info('saved %s vectors to %s' %(label_min_vector.size, label_norm_file))
 
+            logger.info('saved %s variance vector to %s' %(feature_name, var_file_dict[feature_name]))
 
-        ### make output duration data
-        if cfg.MAKEDUR:
-            if cfg.label_style == 'cppmary':
-                logger.info('creating cppmary duration (output) features')
-                label_cppmary.prepare_dur_feature(in_label_align_file_list, dur_file_list)
-            else:
-                logger.info('creating duration (output) features')
-                raise
-
-
-        ### make output acoustic data
-        if cfg.MAKECMP: #如果有多个数据流则合并，并计算delta，delta-delta
-            logger.info('creating acoustic (output) features')
-            delta_win = cfg.delta_win #[-0.5, 0.0, 0.5]
-            acc_win = cfg.acc_win     #[1.0, -2.0, 1.0]
-
-            acoustic_worker = AcousticComposition(delta_win = delta_win, acc_win = acc_win)
-            if 'dur' in cfg.in_dir_dict.keys() and cfg.AcousticModel:
-                acoustic_worker.make_equal_frames(dur_file_list, lf0_file_list, cfg.in_dimension_dict)
-            acoustic_worker.prepare_nn_data(in_file_list_dict, nn_cmp_file_list, cfg.in_dimension_dict, cfg.out_dimension_dict)
-
-
-        ### normalise output acoustic data
-        if cfg.NORMCMP:
-            logger.info('normalising acoustic (output) features using method %s' % cfg.output_feature_normalisation)
-            cmp_norm_info = None
-            if cfg.output_feature_normalisation == 'MVN':
-                normaliser = MeanVarianceNorm(feature_dimension=cfg.cmp_dim)
-                ###calculate mean and std vectors on the training data, and apply on the whole dataset
-                global_mean_vector = normaliser.compute_mean(nn_cmp_file_list[0:cfg.train_file_number], 0, cfg.cmp_dim)
-                global_std_vector = normaliser.compute_std(nn_cmp_file_list[0:cfg.train_file_number], global_mean_vector, 0, cfg.cmp_dim)
-
-                normaliser.feature_normalisation(nn_cmp_file_list[0:cfg.train_file_number+cfg.valid_file_number],
-                                                 nn_cmp_norm_file_list[0:cfg.train_file_number+cfg.valid_file_number])
-                cmp_norm_info = numpy.concatenate((global_mean_vector, global_std_vector), axis=0)
-
-            elif cfg.output_feature_normalisation == 'MINMAX':
-                min_max_normaliser = MinMaxNormalisation(feature_dimension = cfg.cmp_dim)
-                global_mean_vector = min_max_normaliser.compute_mean(nn_cmp_file_list[0:cfg.train_file_number])
-                global_std_vector = min_max_normaliser.compute_std(nn_cmp_file_list[0:cfg.train_file_number], global_mean_vector)
-
-                min_max_normaliser = MinMaxNormalisation(feature_dimension = cfg.cmp_dim, min_value = 0.01, max_value = 0.99)
-                min_max_normaliser.find_min_max_values(nn_cmp_file_list[0:cfg.train_file_number])
-                min_max_normaliser.normalise_data(nn_cmp_file_list, nn_cmp_norm_file_list)
-
-                cmp_min_vector = min_max_normaliser.min_vector
-                cmp_max_vector = min_max_normaliser.max_vector
-                cmp_norm_info = numpy.concatenate((cmp_min_vector, cmp_max_vector), axis=0)
-
-            else:
-                logger.critical('Normalisation type %s is not supported!\n' %(cfg.output_feature_normalisation))
-                raise
-
-            cmp_norm_info = numpy.array(cmp_norm_info, 'float32')
-            fid = open(norm_info_file, 'wb')
-            cmp_norm_info.tofile(fid)
-            fid.close()
-            logger.info('saved %s vectors to %s' %(cfg.output_feature_normalisation, norm_info_file))
-
-            feature_index = 0
-            for feature_name in cfg.out_dimension_dict.keys():
-                feature_std_vector = numpy.array(global_std_vector[:,feature_index:feature_index+cfg.out_dimension_dict[feature_name]], 'float32')
-
-                fid = open(var_file_dict[feature_name], 'w')
-                feature_var_vector = feature_std_vector**2
-                feature_var_vector.tofile(fid)
-                fid.close()
-
-                logger.info('saved %s variance vector to %s' %(feature_name, var_file_dict[feature_name]))
-
-                feature_index += cfg.out_dimension_dict[feature_name]
-    else:
-        "use the previous prepare data"
+            feature_index += cfg.out_dimension_dict[feature_name]
 
     train_x_file_list = nn_label_norm_file_list[0:cfg.train_file_number]
     train_y_file_list = nn_cmp_norm_file_list[0:cfg.train_file_number]
@@ -688,7 +684,7 @@ def main_function(cfg):
     #
     # currently, there are two ways to do this
     if cfg.label_style == 'cppmary':
-        if data_prepare:
+        if cfg.NORMLAB:
             lab_dim = label_cppmary.label_dimension
         else:
             if cfg.AcousticModel:
