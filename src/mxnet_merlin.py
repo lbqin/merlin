@@ -26,14 +26,15 @@ class SimpleBatch(object):
 
 
 class TTSIter(mx.io.DataIter):
-    def __init__(self, x_file_list, y_file_list, n_ins=0, n_outs=0, batch_size=500000,
+    def __init__(self, x_file_list, y_file_list, n_ins=0, n_outs=0, batch_size=100,
                  sequential=False, network_type=None, shuffle=False):
         self.n_ins = n_ins
         self.n_outs = n_outs
         self.batch_size = batch_size
+        self.buffer_size = 2000000
         self.sequential = sequential
         self.network_type = network_type
-        self.batch_label = []
+        self.buffer_size = int(self.buffer_size / self.batch_size) * batch_size
 
         # remove potential empty lines and end of line signs
         try:
@@ -79,25 +80,25 @@ class TTSIter(mx.io.DataIter):
         self.end_reading = False
         logging.info('initialised')
 
+
     def __iter__(self):
         while (not self.is_finish()):
             data_value = mx.nd.empty((self.batch_size, self.n_ins))
             label_value = mx.nd.empty((self.batch_size, self.n_outs))
+            batch_size = self.batch_size
             temp_train_set_x, temp_train_set_y = self.load_one_partition()
-            if temp_train_set_x.shape[0] < batch_size:
-                return
-            # print data_value.shape, temp_train_set_x.shape
-            data_value[:] = temp_train_set_x
-            label_value[:] = temp_train_set_y
-            # print data_value.shape, label_value.shape
-            data_all = [data_value]
-            label_all = [label_value]
-            data_names = ['data']
-            label_names = ['label']
-            yield SimpleBatch(data_names, data_all, label_names, label_all)
+            n_train_batches = temp_train_set_x.shape[0] / batch_size
+            for index in xrange(n_train_batches):
+                # print data_value.shape, temp_train_set_x.shape
+                data_value[:] = temp_train_set_x[index*batch_size : (index+1)*batch_size]
+                label_value[:] = temp_train_set_y[index*batch_size : (index+1)*batch_size]
+                # print data_value.shape, label_value.shape
+                data_all = [data_value]
+                label_all = [label_value]
+                data_names = ['data']
+                label_names = ['label']
 
-    def getlabel(self):
-        return self.batch_label
+                yield SimpleBatch(data_names, data_all, label_names, label_all)
 
 
     def reset(self):
@@ -131,8 +132,8 @@ class TTSIter(mx.io.DataIter):
 
         """
 
-        temp_set_x = np.empty((self.batch_size, self.n_ins))
-        temp_set_y = np.empty((self.batch_size, self.n_outs))
+        temp_set_x = np.empty((self.buffer_size, self.n_ins))
+        temp_set_y = np.empty((self.buffer_size, self.n_outs))
 
         io_fun = BinaryIOCollection()
 
@@ -165,8 +166,8 @@ class TTSIter(mx.io.DataIter):
 
     def load_next_utterance_CTC(self):
 
-        temp_set_x = np.empty((self.batch_size, self.n_ins))
-        temp_set_y = np.empty(self.batch_size)
+        temp_set_x = np.empty((self.buffer_size, self.n_ins))
+        temp_set_y = np.empty(self.buffer_size)
 
         io_fun = BinaryIOCollection()
 
@@ -193,10 +194,10 @@ class TTSIter(mx.io.DataIter):
 
         """
 
-        #logging.info('loading one block')
+        logging.info('loading one block')
 
-        temp_set_x = np.empty((self.batch_size, self.n_ins))
-        temp_set_y = np.empty((self.batch_size, self.n_outs))
+        temp_set_x = np.empty((self.buffer_size, self.n_ins))
+        temp_set_y = np.empty((self.buffer_size, self.n_outs))
         current_index = 0
 
         ### first check whether there are remaining data from previous utterance
@@ -209,7 +210,7 @@ class TTSIter(mx.io.DataIter):
 
         io_fun = BinaryIOCollection()
         while True:
-            if current_index >= self.batch_size:
+            if current_index >= self.buffer_size:
                 break
             if self.file_index >= self.list_size:
                 self.end_reading = True
@@ -235,16 +236,16 @@ class TTSIter(mx.io.DataIter):
             out_features = out_features[0:frame_number, ]
             in_features = in_features[0:frame_number, ]
 
-            if current_index + frame_number <= self.batch_size:
+            if current_index + frame_number <= self.buffer_size:
                 temp_set_x[current_index:current_index + frame_number, ] = in_features
                 temp_set_y[current_index:current_index + frame_number, ] = out_features
 
                 current_index = current_index + frame_number
             else:  ## if current utterance cannot be stored in the block, then leave the remaining part for the next block
-                used_frame_number = self.batch_size - current_index
-                temp_set_x[current_index:self.batch_size, ] = in_features[0:used_frame_number, ]
-                temp_set_y[current_index:self.batch_size, ] = out_features[0:used_frame_number, ]
-                current_index = self.batch_size
+                used_frame_number = self.buffer_size - current_index
+                temp_set_x[current_index:self.buffer_size, ] = in_features[0:used_frame_number, ]
+                temp_set_y[current_index:self.buffer_size, ] = out_features[0:used_frame_number, ]
+                current_index = self.buffer_size
 
                 self.remain_data_x = in_features[used_frame_number:frame_number, ]
                 self.remain_data_y = out_features[used_frame_number:frame_number, ]
@@ -326,7 +327,7 @@ def prepare_data():
     label_data_dir = exp_dir + "duration_model/data/"
     data_dir = exp_dir + "duration_model/data/"
     combined_feature_name = "_dur"
-    file_id_scp = data_dir + "file_id_list_full.scp"
+    file_id_scp = data_dir + "file_id_list_demo.scp"
     try:
         file_id_list = read_file_list(file_id_scp)
         logging.info('Loaded file id list from %s' % file_id_scp)
@@ -388,7 +389,7 @@ if __name__ == '__main__':
     net = get_net()
     print net.list_arguments()
 
-    batch_size = 100
+    batch_size = 64
     n_epoch = 25
     lab_dim = 416
     model_prefix = 'duration'
@@ -398,7 +399,7 @@ if __name__ == '__main__':
     n_outs = cmp_dim
     sequential_training = False
     train_type = 2
-    only_test = 1
+    only_test = 0
 
     train_x_file_list, valid_x_file_list, train_y_file_list, valid_y_file_list = prepare_data()
 
@@ -427,7 +428,7 @@ if __name__ == '__main__':
         model = mx.model.FeedForward(ctx = devs,
                                          symbol = net,
                                          num_epoch = n_epoch,
-                                         learning_rate = 0.0001,
+                                         learning_rate = 0.002,
                                          wd = 0.0001,
                                          lr_scheduler=mx.lr_scheduler.FactorScheduler(2000,0.9),
                                          initializer = mx.init.Xavier(factor_type="in", magnitude=2.34), momentum = 0.9)
