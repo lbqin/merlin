@@ -224,6 +224,8 @@ class TTSIter(mx.io.DataIter):
 
             frame_number = lab_frame_number
             if abs(lab_frame_number - out_frame_number) < 5:  ## we allow small difference here. may not be correct, but sometimes, there is one/two frames difference
+                #base_file_name = self.x_files_list[self.file_index].split('/')[-1].split('.')[0]
+                #logging.info("the number of frames in label and acoustic features are different: %d vs %d (%s)" % (lab_frame_number, out_frame_number, base_file_name))
                 if lab_frame_number > out_frame_number:
                     frame_number = out_frame_number
             else:
@@ -231,7 +233,8 @@ class TTSIter(mx.io.DataIter):
                 logging.info(
                     "the number of frames in label and acoustic features are different: %d vs %d (%s)" % (
                     lab_frame_number, out_frame_number, base_file_name))
-                raise
+                self.file_index += 1
+                continue
 
             out_features = out_features[0:frame_number, ]
             in_features = in_features[0:frame_number, ]
@@ -318,7 +321,7 @@ def prepare_file_path_list(file_id_list, file_dir, file_extension, new_dir_switc
     return  file_name_list
 
 
-def prepare_data():
+def prepare_duration_data(lab_dim, cmp_dim):
 
     train_file_number = 1000
     valid_file_number = 66
@@ -336,7 +339,7 @@ def prepare_data():
         logging.info('Could not load file id list from %s' % file_id_scp)
         raise
 
-    nn_label_norm_dir = os.path.join(label_data_dir, 'nn_no_silence_lab_norm_' + suffix)
+    nn_label_norm_dir = os.path.join(label_data_dir, 'nn_no_silence_lab_norm_' + str(lab_dim))
     nn_cmp_norm_dir = os.path.join(data_dir, 'nn_norm' + combined_feature_name + '_' + str(cmp_dim))
 
     nn_label_norm_file_list = prepare_file_path_list(file_id_list, nn_label_norm_dir, ".lab")
@@ -347,10 +350,40 @@ def prepare_data():
     valid_y_file_list = nn_cmp_norm_file_list[train_file_number:train_file_number + valid_file_number]
     return train_x_file_list, valid_x_file_list, train_y_file_list, valid_y_file_list
 
-def get_net():
-    input_dim = 416
-    output_dim = 5
-    hidden_dim = 512
+def prepare_acoustic_data(lab_dim, cmp_dim):
+    train_file_number = 1000
+    valid_file_number = 66
+
+    exp_dir = "/home/sooda/speech/merlin/egs/slt_arctic/s1/experiments/slt_arctic_full/"
+    label_data_dir = exp_dir + "acoustic_model/data/"
+    data_dir = exp_dir + "acoustic_model/data/"
+    combined_feature_name = "_mgc_lf0_vuv_bap"
+    file_id_scp = data_dir + "file_id_list_demo.scp"
+    try:
+        file_id_list = read_file_list(file_id_scp)
+        logging.info('Loaded file id list from %s' % file_id_scp)
+    except IOError:
+        # this means that open(...) threw an error
+        logging.info('Could not load file id list from %s' % file_id_scp)
+        raise
+
+    nn_label_norm_dir = os.path.join(label_data_dir, 'nn_no_silence_lab_norm_' + str(lab_dim))
+    nn_cmp_norm_dir = os.path.join(data_dir, 'nn_norm' + combined_feature_name + '_' + str(cmp_dim))
+
+    print file_id_list[0]
+    nn_label_norm_file_list = prepare_file_path_list(file_id_list, nn_label_norm_dir, ".lab")
+    print file_id_list[0],nn_label_norm_file_list[0]
+    nn_cmp_norm_file_list = prepare_file_path_list(file_id_list, nn_cmp_norm_dir, ".cmp")
+    print file_id_list[0], nn_cmp_norm_file_list[0]
+    train_x_file_list = nn_label_norm_file_list[0:train_file_number]
+    valid_x_file_list = nn_label_norm_file_list[train_file_number:train_file_number + valid_file_number]
+    train_y_file_list = nn_cmp_norm_file_list[0:train_file_number]
+    valid_y_file_list = nn_cmp_norm_file_list[train_file_number:train_file_number + valid_file_number]
+    print train_y_file_list[0], valid_y_file_list[0]
+    return train_x_file_list, valid_x_file_list, train_y_file_list, valid_y_file_list
+
+
+def get_net(input_dim, output_dim, hidden_dim):
     data = mx.symbol.Variable('data')
     label = mx.symbol.Variable('label')
     fc1 = mx.symbol.FullyConnected(data, name='fc1', num_hidden=hidden_dim)
@@ -382,61 +415,91 @@ def test(val_dataiter, model_prefix, num_epochs):
         print "------------"
 
 
-
-if __name__ == '__main__':
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
-    net = get_net()
+def setting_duration():
+    input_dim = 416
+    output_dim = 5
+    hidden_dim = 512
+    net = get_net(input_dim, output_dim, hidden_dim)
     print net.list_arguments()
 
     batch_size = 64
-    n_epoch = 25
-    lab_dim = 416
-    model_prefix = 'duration'
-    suffix = str(lab_dim)
-    cmp_dim = 5
-    n_ins = lab_dim
-    n_outs = cmp_dim
+    n_ins = input_dim
+    n_outs = output_dim
     sequential_training = False
-    train_type = 2
-    only_test = 0
 
-    train_x_file_list, valid_x_file_list, train_y_file_list, valid_y_file_list = prepare_data()
+    train_x_file_list, valid_x_file_list, train_y_file_list, valid_y_file_list = prepare_duration_data(input_dim, output_dim)
 
     train_dataiter = TTSIter(x_file_list = train_x_file_list, y_file_list = train_y_file_list,
                                 n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
 
     val_dataiter = TTSIter(x_file_list = valid_x_file_list, y_file_list = valid_y_file_list,
                                 n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
+    return net, train_dataiter, val_dataiter
 
+def setting_acoustic():
+    input_dim = 425
+    output_dim = 187
+    hidden_dim = 1024
+    net = get_net(input_dim, output_dim, hidden_dim)
+    print net.list_arguments()
+
+    batch_size = 64
+    n_ins = input_dim
+    n_outs = output_dim
+    sequential_training = False
+
+    train_x_file_list, valid_x_file_list, train_y_file_list, valid_y_file_list = prepare_acoustic_data(input_dim, output_dim)
+    print train_x_file_list[0:3]
+    print train_y_file_list[0:3]
+
+    train_dataiter = TTSIter(x_file_list = train_x_file_list, y_file_list = train_y_file_list,
+                                n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
+
+    val_dataiter = TTSIter(x_file_list = valid_x_file_list, y_file_list = valid_y_file_list,
+                                n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
+    return net, train_dataiter, val_dataiter
+
+def train(net, train_dataiter, val_dataiter, model_prefix):
+    n_epoch = 25
+    only_test = 0
+    train_type = 2
     if only_test:
         test(val_dataiter, model_prefix, n_epoch)
         exit()
-    logging.basicConfig(level=logging.DEBUG)
     train_dataiter.reset()
     metric = mx.metric.create('mse')
     if train_type == 1:
         mod = mx.mod.Module(net)
         mod.fit(train_dataiter, eval_data=val_dataiter, eval_metric=metric,
             optimizer_params={'learning_rate':0.01, 'momentum': 0.9}, num_epoch=n_epoch)
-        #evaluate on validation set with a evaluation metric
         mod.score(val_dataiter, metric)
         for name, val in metric.get_name_value():
             print('%s=%f' % (name, val))
     else:
-        devs = mx.cpu()
+        devs = mx.gpu()
         model = mx.model.FeedForward(ctx = devs,
                                          symbol = net,
                                          num_epoch = n_epoch,
                                          learning_rate = 0.002,
                                          wd = 0.0001,
-                                         lr_scheduler=mx.lr_scheduler.FactorScheduler(2000,0.9),
+                                         lr_scheduler=mx.lr_scheduler.FactorScheduler(100000,0.9),
                                          initializer = mx.init.Xavier(factor_type="in", magnitude=2.34), momentum = 0.9)
 
-        model.fit(X = train_dataiter, eval_data = val_dataiter, eval_metric = metric, batch_end_callback = mx.callback.Speedometer(batch_size, 200))
-
-
+        model.fit(X = train_dataiter, eval_data = val_dataiter, eval_metric = metric, batch_end_callback = mx.callback.Speedometer(100, 100))
         model.save(model_prefix, n_epoch)
+        print model_prefix, " done"
 
-        print "done"
+if __name__ == '__main__':
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    logging.basicConfig(level=logging.DEBUG)
+    train_type = "acoustic"
+    if train_type == 'duration':
+        net, train_dataiter, val_dataiter = setting_duration()
+        model_prefix = 'duration'
+        train(net, train_dataiter, val_dataiter, model_prefix)
+    else:
+        net, train_dataiter, val_dataiter = setting_acoustic()
+        model_prefix = 'acoustic'
+        train(net, train_dataiter, val_dataiter, model_prefix)
 
