@@ -396,23 +396,49 @@ def get_net(input_dim, output_dim, hidden_dim):
     act4 = mx.symbol.Activation(fc4, name='tanh4', act_type="tanh")
     fc5 = mx.symbol.FullyConnected(act4, name='fc5', num_hidden=hidden_dim)
     act5 = mx.symbol.Activation(fc5, name='tanh5', act_type="tanh")
-    fc6 = mx.symbol.FullyConnected(act5, name='fc6', num_hidden=output_dim)
-    #act6 = mx.symbol.Activation(fc6, name='tanh6', act_type="tanh")
-    linear = mx.symbol.LinearRegressionOutput(data=fc6, name="linear",label=label)
+    fc6 = mx.symbol.FullyConnected(act5, name='fc6', num_hidden=hidden_dim)
+    act6 = mx.symbol.Activation(fc6, name='tanh6', act_type="tanh")
+    fc7 = mx.symbol.FullyConnected(act5, name='fc7', num_hidden=output_dim)
+    linear = mx.symbol.LinearRegressionOutput(data=fc7, name="linear",label=label)
     mx.viz.plot_network(linear).render()
-
-    #linear = mx.symbol.SoftmaxOutput(fc3, name='softmax')
     return linear
 
 def test(val_dataiter, model_prefix, num_epochs):
     print "test..."
     model_test = mx.model.FeedForward.load(model_prefix, num_epochs)
-    preds,data,label = model_test.predict(val_dataiter, 10, return_data=True)
+    #preds,data,label = model_test.predict(val_dataiter, 10, return_data=True)
+    preds = []
+    data = np.array([])
+    label = np.array([])
+    for batch in val_dataiter:
+        for j, x in enumerate(batch.data):
+            x = x.asnumpy()
+            if data.shape[0]:
+                data = np.concatenate((data, x), axis=0)
+            else:
+                data = x
+        for j, y in enumerate(batch.label):
+            y = y.asnumpy()
+            if label.shape[0]:
+                label = np.concatenate((label, y), axis=0)
+            else:
+                label = y
 
-    for i in xrange(len(preds)):
-        print preds[i]
-        print label[i]
-        print "------------"
+    preds = model_test.predict(data)
+    for i in xrange(preds.shape[0]):
+        print preds[i, 0:5]
+        print label[i, 0:5]
+        print "........."
+
+
+    #for feats in data:
+    #    preds.append(model_test.predict(feats))
+
+    #for i in xrange(len(preds)):
+    #    #print preds[i][0:5]
+    #    #print label[i][0:5]
+    #    print preds[i].shape, label[i].shape
+    #    print "------------"
 
 
 def setting_duration():
@@ -443,14 +469,12 @@ def setting_acoustic():
     net = get_net(input_dim, output_dim, hidden_dim)
     print net.list_arguments()
 
-    batch_size = 64
+    batch_size = 256
     n_ins = input_dim
     n_outs = output_dim
     sequential_training = False
 
     train_x_file_list, valid_x_file_list, train_y_file_list, valid_y_file_list = prepare_acoustic_data(input_dim, output_dim)
-    print train_x_file_list[0:3]
-    print train_y_file_list[0:3]
 
     train_dataiter = TTSIter(x_file_list = train_x_file_list, y_file_list = train_y_file_list,
                                 n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
@@ -461,7 +485,7 @@ def setting_acoustic():
 
 def train(net, train_dataiter, val_dataiter, model_prefix):
     n_epoch = 25
-    only_test = 0
+    only_test = 1
     train_type = 2
     if only_test:
         test(val_dataiter, model_prefix, n_epoch)
@@ -485,7 +509,7 @@ def train(net, train_dataiter, val_dataiter, model_prefix):
                                          lr_scheduler=mx.lr_scheduler.FactorScheduler(100000,0.9),
                                          initializer = mx.init.Xavier(factor_type="in", magnitude=2.34), momentum = 0.9)
 
-        model.fit(X = train_dataiter, eval_data = val_dataiter, eval_metric = metric, batch_end_callback = mx.callback.Speedometer(100, 100))
+        model.fit(X = train_dataiter, eval_data = val_dataiter, eval_metric = metric, batch_end_callback = mx.callback.Speedometer(256, 256))
         model.save(model_prefix, n_epoch)
         print model_prefix, " done"
 
