@@ -440,7 +440,6 @@ def test(val_dataiter, model_prefix, num_epochs):
     #    print preds[i].shape, label[i].shape
     #    print "------------"
 
-
 def setting_duration():
     input_dim = 416
     output_dim = 5
@@ -513,10 +512,49 @@ def train(net, train_dataiter, val_dataiter, model_prefix):
         model.save(model_prefix, n_epoch)
         print model_prefix, " done"
 
+def dnn_generation_mxnet(valid_file_list, dnn_model, n_ins, n_outs, out_file_list):
+    logging.info('Starting dnn_generation')
+
+    file_number = len(valid_file_list)
+    for i in xrange(file_number):
+        logging.info('generating %4d of %4d: %s' % (i+1,file_number,valid_file_list[i]) )
+        fid_lab = open(valid_file_list[i], 'rb')
+        features = np.fromfile(fid_lab, dtype=np.float32)
+        fid_lab.close()
+        features = features[:(n_ins * (features.size / n_ins))]
+        test_set_x = features.reshape((-1, n_ins))
+        #predicted_parameter = dnn_model.parameter_prediction(test_set_x)
+        predicted_parameter = dnn_model.predict(test_set_x)
+        ### write to cmp file
+        predicted_parameter = np.array(predicted_parameter, 'float32')
+        temp_parameter = predicted_parameter
+        fid = open(out_file_list[i], 'wb')
+        predicted_parameter.tofile(fid)
+        logging.info('saved to %s' % out_file_list[i])
+        fid.close()
+
+def test_generation():
+    model_prefix = 'duration'
+    num_epoch = 25
+    model_test = mx.model.FeedForward.load(model_prefix, num_epoch)
+    test_dir = "/home/sooda/speech/merlin/egs/slt_arctic/s1/experiments/slt_arctic_full/test_synthesis/"
+    lab_dir = test_dir + "prompt-lab/"
+    cmp_dir = test_dir + "duration_out/"
+    file_id_scp = test_dir + "test_id_list.scp"
+    n_ins = 416
+    n_outs = 5
+    file_id_list = read_file_list(file_id_scp)
+    valid_file_list = prepare_file_path_list(file_id_list, lab_dir, ".lab")
+    cmp_file_list = prepare_file_path_list(file_id_list, cmp_dir, ".cmp")
+    dnn_generation_mxnet(valid_file_list, model_test, n_ins, n_outs, cmp_file_list)
+
+
 if __name__ == '__main__':
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
     logging.basicConfig(level=logging.DEBUG)
+    test_generation()
+    exit()
     train_type = "acoustic"
     if train_type == 'duration':
         net, train_dataiter, val_dataiter = setting_duration()
