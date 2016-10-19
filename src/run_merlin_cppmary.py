@@ -53,6 +53,8 @@ import logging # as logging
 import logging.config
 import StringIO
 import random
+import mxnet as mx
+from mxnet_merlin import *
 
 
 def extract_file_id_list(file_list):
@@ -734,12 +736,37 @@ def main_function(cfg):
                 raise
 
         try:
-            train_DNN(train_xy_file_list = (train_x_file_list, train_y_file_list), \
-                      valid_xy_file_list = (valid_x_file_list, valid_y_file_list), \
-                      nnets_file_name = nnets_file_name, \
-                      n_ins = lab_dim, n_outs = cfg.cmp_dim, ms_outs = cfg.multistream_outs, \
-                      hyper_params = cfg.hyper_params, buffer_size = cfg.buffer_size, plot = cfg.plot, var_dict = var_dict,
-                      cmp_mean_vector = cmp_mean_vector, cmp_std_vector = cmp_std_vector)
+            if cfg.framework == 'mxnet':
+                hidden_dim = 512
+                network_type = 'duration'
+                batch_size = 64
+                sequential_training = False
+                if cfg.AcousticModel:
+                    network_type = 'acoustic'
+                    hidden_dim = 1024
+                    batch_size = 256
+                else:
+                    network_type = 'duration'
+                    hidden_dim = 512
+                    batch_size = 64
+                n_ins = lab_dim
+                n_outs = cfg.cmp_dim
+                input_dim = n_ins
+                output_dim = n_outs
+                n_epoch = 25
+                train_dataiter = TTSIter(x_file_list = train_x_file_list, y_file_list = train_y_file_list, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
+                val_dataiter = TTSIter(x_file_list = valid_x_file_list, y_file_list = valid_y_file_list, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
+                model_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, network_type)
+                model_dnn.train(train_dataiter, val_dataiter)
+                print "model train ok"
+
+            else:
+                train_DNN(train_xy_file_list = (train_x_file_list, train_y_file_list), \
+                          valid_xy_file_list = (valid_x_file_list, valid_y_file_list), \
+                          nnets_file_name = nnets_file_name, \
+                          n_ins = lab_dim, n_outs = cfg.cmp_dim, ms_outs = cfg.multistream_outs, \
+                          hyper_params = cfg.hyper_params, buffer_size = cfg.buffer_size, plot = cfg.plot, var_dict = var_dict,
+                          cmp_mean_vector = cmp_mean_vector, cmp_std_vector = cmp_std_vector)
         except KeyboardInterrupt:
             logger.critical('train_DNN interrupted via keyboard')
             # Could 'raise' the exception further, but that causes a deep traceback to be printed
@@ -778,7 +805,16 @@ def main_function(cfg):
 
         gen_file_list = prepare_file_path_list(gen_file_id_list, gen_dir, cfg.cmp_ext)
 
-        dnn_generation(test_x_file_list, nnets_file_name, lab_dim, cfg.cmp_dim, gen_file_list)
+        if cfg.framework == 'mxnet':
+            model_prefix='duration'
+            if cfg.AcousticModel:
+                model_prefix = 'acoustic'
+            else:
+                model_prefix = 'duration'
+            model_dnn = mx.model.FeedForward.load(model_prefix, 0)
+            dnn_generation_mxnet(test_x_file_list, model_dnn, lab_dim, cfg.cmp_dim, gen_file_list)
+        else:
+            dnn_generation(test_x_file_list, nnets_file_name, lab_dim, cfg.cmp_dim, gen_file_list)
 
     	logger.debug('denormalising generated output using method %s' % cfg.output_feature_normalisation)
 

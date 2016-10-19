@@ -8,6 +8,53 @@ from io_funcs.binary_io import  BinaryIOCollection
 import sys
 import os
 
+class MxnetTTs():
+    def __init__(self, input_dim, output_dim, hidden_dim, batch_size, n_epoch, network_type):
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.hidden_dim = hidden_dim
+        self.n_epoch = n_epoch
+        self.network_type = network_type
+        self.batch_size = batch_size
+        self.network = self.get_net(self.input_dim, self.output_dim, self.hidden_dim)
+        print self.network.list_arguments()
+
+
+    def get_net(self, input_dim, output_dim, hidden_dim):
+        data = mx.symbol.Variable('data')
+        label = mx.symbol.Variable('label')
+        fc1 = mx.symbol.FullyConnected(data, name='fc1', num_hidden=hidden_dim)
+        act1 = mx.symbol.Activation(fc1, name='tanh1', act_type="tanh")
+        fc2 = mx.symbol.FullyConnected(act1, name='fc2', num_hidden=hidden_dim)
+        act2 = mx.symbol.Activation(fc2, name='tanh2', act_type="tanh")
+        fc3 = mx.symbol.FullyConnected(act2, name='fc3', num_hidden=hidden_dim)
+        act3 = mx.symbol.Activation(fc3, name='tanh3', act_type="tanh")
+        fc4 = mx.symbol.FullyConnected(act3, name='fc4', num_hidden=hidden_dim)
+        act4 = mx.symbol.Activation(fc4, name='tanh4', act_type="tanh")
+        fc5 = mx.symbol.FullyConnected(act4, name='fc5', num_hidden=hidden_dim)
+        act5 = mx.symbol.Activation(fc5, name='tanh5', act_type="tanh")
+        fc6 = mx.symbol.FullyConnected(act5, name='fc6', num_hidden=hidden_dim)
+        act6 = mx.symbol.Activation(fc6, name='tanh6', act_type="tanh")
+        fc7 = mx.symbol.FullyConnected(act5, name='fc7', num_hidden=output_dim)
+        linear = mx.symbol.LinearRegressionOutput(data=fc7, name="linear",label=label)
+        #mx.viz.plot_network(linear).render()
+        return linear
+
+    def train(self, train_dataiter, val_dataiter):
+        train_dataiter.reset()
+        metric = mx.metric.create('mse')
+        devs = mx.gpu()
+        model = mx.model.FeedForward(ctx = devs,
+                                     symbol = self.network,
+                                     num_epoch = self.n_epoch,
+                                     learning_rate = 0.002,
+                                     wd = 0.0001,
+                                     lr_scheduler=mx.lr_scheduler.FactorScheduler(10000,0.9),
+                                     initializer = mx.init.Xavier(factor_type="in", magnitude=2.34), momentum = 0.9)
+
+        model.fit(X = train_dataiter, eval_data = val_dataiter, eval_metric = metric, batch_end_callback = mx.callback.Speedometer(self.batch_size, 256))
+        model.save(self.network_type, 0)
+
 class SimpleBatch(object):
     def __init__(self, data_names, data, label_names, label):
         self.data = data
@@ -266,9 +313,6 @@ class TTSIter(mx.io.DataIter):
 
         return temp_set_x, temp_set_y
 
-
-
-
     def getpad(self):
         return 0
 
@@ -383,25 +427,26 @@ def prepare_acoustic_data(lab_dim, cmp_dim):
     return train_x_file_list, valid_x_file_list, train_y_file_list, valid_y_file_list
 
 
-def get_net(input_dim, output_dim, hidden_dim):
-    data = mx.symbol.Variable('data')
-    label = mx.symbol.Variable('label')
-    fc1 = mx.symbol.FullyConnected(data, name='fc1', num_hidden=hidden_dim)
-    act1 = mx.symbol.Activation(fc1, name='tanh1', act_type="tanh")
-    fc2 = mx.symbol.FullyConnected(act1, name='fc2', num_hidden=hidden_dim)
-    act2 = mx.symbol.Activation(fc2, name='tanh2', act_type="tanh")
-    fc3 = mx.symbol.FullyConnected(act2, name='fc3', num_hidden=hidden_dim)
-    act3 = mx.symbol.Activation(fc3, name='tanh3', act_type="tanh")
-    fc4 = mx.symbol.FullyConnected(act3, name='fc4', num_hidden=hidden_dim)
-    act4 = mx.symbol.Activation(fc4, name='tanh4', act_type="tanh")
-    fc5 = mx.symbol.FullyConnected(act4, name='fc5', num_hidden=hidden_dim)
-    act5 = mx.symbol.Activation(fc5, name='tanh5', act_type="tanh")
-    fc6 = mx.symbol.FullyConnected(act5, name='fc6', num_hidden=hidden_dim)
-    act6 = mx.symbol.Activation(fc6, name='tanh6', act_type="tanh")
-    fc7 = mx.symbol.FullyConnected(act5, name='fc7', num_hidden=output_dim)
-    linear = mx.symbol.LinearRegressionOutput(data=fc7, name="linear",label=label)
-    mx.viz.plot_network(linear).render()
-    return linear
+def dnn_generation_mxnet(valid_file_list, dnn_model, n_ins, n_outs, out_file_list):
+    logging.info('Starting dnn_generation')
+
+    file_number = len(valid_file_list)
+    for i in xrange(file_number):
+        logging.info('generating %4d of %4d: %s' % (i+1,file_number,valid_file_list[i]) )
+        fid_lab = open(valid_file_list[i], 'rb')
+        features = np.fromfile(fid_lab, dtype=np.float32)
+        fid_lab.close()
+        features = features[:(n_ins * (features.size / n_ins))]
+        test_set_x = features.reshape((-1, n_ins))
+        predicted_parameter = dnn_model.predict(test_set_x)
+        ### write to cmp file
+        predicted_parameter = np.array(predicted_parameter, 'float32')
+        print features.shape, predicted_parameter.shape
+        temp_parameter = predicted_parameter
+        fid = open(out_file_list[i], 'wb')
+        predicted_parameter.tofile(fid)
+        logging.info('saved to %s' % out_file_list[i])
+        fid.close()
 
 def test(val_dataiter, model_prefix, num_epochs):
     print "test..."
@@ -440,14 +485,7 @@ def test(val_dataiter, model_prefix, num_epochs):
     #    print preds[i].shape, label[i].shape
     #    print "------------"
 
-def setting_duration():
-    input_dim = 416
-    output_dim = 5
-    hidden_dim = 512
-    net = get_net(input_dim, output_dim, hidden_dim)
-    print net.list_arguments()
-
-    batch_size = 64
+def setting_duration(input_dim, output_dim, batch_size):
     n_ins = input_dim
     n_outs = output_dim
     sequential_training = False
@@ -456,19 +494,11 @@ def setting_duration():
 
     train_dataiter = TTSIter(x_file_list = train_x_file_list, y_file_list = train_y_file_list,
                                 n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
-
     val_dataiter = TTSIter(x_file_list = valid_x_file_list, y_file_list = valid_y_file_list,
                                 n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
-    return net, train_dataiter, val_dataiter
+    return train_dataiter, val_dataiter
 
-def setting_acoustic():
-    input_dim = 425
-    output_dim = 187
-    hidden_dim = 1024
-    net = get_net(input_dim, output_dim, hidden_dim)
-    print net.list_arguments()
-
-    batch_size = 256
+def setting_acoustic(input_dim, output_dim, batch_size):
     n_ins = input_dim
     n_outs = output_dim
     sequential_training = False
@@ -477,72 +507,24 @@ def setting_acoustic():
 
     train_dataiter = TTSIter(x_file_list = train_x_file_list, y_file_list = train_y_file_list,
                                 n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
-
     val_dataiter = TTSIter(x_file_list = valid_x_file_list, y_file_list = valid_y_file_list,
                                 n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
-    return net, train_dataiter, val_dataiter
-
-def train(net, train_dataiter, val_dataiter, model_prefix):
-    n_epoch = 25
-    only_test = 1
-    train_type = 2
-    if only_test:
-        test(val_dataiter, model_prefix, n_epoch)
-        exit()
-    train_dataiter.reset()
-    metric = mx.metric.create('mse')
-    if train_type == 1:
-        mod = mx.mod.Module(net)
-        mod.fit(train_dataiter, eval_data=val_dataiter, eval_metric=metric,
-            optimizer_params={'learning_rate':0.01, 'momentum': 0.9}, num_epoch=n_epoch)
-        mod.score(val_dataiter, metric)
-        for name, val in metric.get_name_value():
-            print('%s=%f' % (name, val))
-    else:
-        devs = mx.gpu()
-        model = mx.model.FeedForward(ctx = devs,
-                                         symbol = net,
-                                         num_epoch = n_epoch,
-                                         learning_rate = 0.002,
-                                         wd = 0.0001,
-                                         lr_scheduler=mx.lr_scheduler.FactorScheduler(100000,0.9),
-                                         initializer = mx.init.Xavier(factor_type="in", magnitude=2.34), momentum = 0.9)
-
-        model.fit(X = train_dataiter, eval_data = val_dataiter, eval_metric = metric, batch_end_callback = mx.callback.Speedometer(256, 256))
-        model.save(model_prefix, n_epoch)
-        print model_prefix, " done"
-
-def dnn_generation_mxnet(valid_file_list, dnn_model, n_ins, n_outs, out_file_list):
-    logging.info('Starting dnn_generation')
-
-    file_number = len(valid_file_list)
-    for i in xrange(file_number):
-        logging.info('generating %4d of %4d: %s' % (i+1,file_number,valid_file_list[i]) )
-        fid_lab = open(valid_file_list[i], 'rb')
-        features = np.fromfile(fid_lab, dtype=np.float32)
-        fid_lab.close()
-        features = features[:(n_ins * (features.size / n_ins))]
-        test_set_x = features.reshape((-1, n_ins))
-        #predicted_parameter = dnn_model.parameter_prediction(test_set_x)
-        predicted_parameter = dnn_model.predict(test_set_x)
-        ### write to cmp file
-        predicted_parameter = np.array(predicted_parameter, 'float32')
-        temp_parameter = predicted_parameter
-        fid = open(out_file_list[i], 'wb')
-        predicted_parameter.tofile(fid)
-        logging.info('saved to %s' % out_file_list[i])
-        fid.close()
+    return train_dataiter, val_dataiter
 
 def test_generation():
-    model_prefix = 'duration'
+    #model_prefix = 'duration'
+    #n_ins = 416
+    #n_outs = 5
+    model_prefix = 'acoustic'
+    n_ins = 425
+    n_outs = 187
     num_epoch = 25
-    model_test = mx.model.FeedForward.load(model_prefix, num_epoch)
+    model_test = mx.model.FeedForward.load(model_prefix, 0)
     test_dir = "/home/sooda/speech/merlin/egs/slt_arctic/s1/experiments/slt_arctic_full/test_synthesis/"
-    lab_dir = test_dir + "prompt-lab/"
+    #lab_dir = test_dir + "prompt-lab/"
+    lab_dir = test_dir + "gen-lab/"
     cmp_dir = test_dir + "duration_out/"
     file_id_scp = test_dir + "test_id_list.scp"
-    n_ins = 416
-    n_outs = 5
     file_id_list = read_file_list(file_id_scp)
     valid_file_list = prepare_file_path_list(file_id_list, lab_dir, ".lab")
     cmp_file_list = prepare_file_path_list(file_id_list, cmp_dir, ".cmp")
@@ -555,13 +537,25 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     test_generation()
     exit()
-    train_type = "acoustic"
+    train_type = "duration"
     if train_type == 'duration':
-        net, train_dataiter, val_dataiter = setting_duration()
-        model_prefix = 'duration'
-        train(net, train_dataiter, val_dataiter, model_prefix)
+        input_dim = 416
+        output_dim = 5
+        hidden_dim = 512
+        batch_size = 64
+        n_epoch = 25
+        train_dataiter, val_dataiter = setting_duration(input_dim, output_dim, batch_size)
+        network_type = 'duration'
+        duration_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, network_type)
+        duration_dnn.train(train_dataiter, val_dataiter)
     else:
-        net, train_dataiter, val_dataiter = setting_acoustic()
-        model_prefix = 'acoustic'
-        train(net, train_dataiter, val_dataiter, model_prefix)
+        input_dim = 425
+        output_dim = 187
+        hidden_dim = 1024
+        n_epoch = 25
+        batch_size = 256
+        train_dataiter, val_dataiter = setting_acoustic(input_dim, output_dim, batch_size)
+        network_type = 'acoustic'
+        acoustic_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, network_type)
+        acoustic_dnn.train(train_dataiter, val_dataiter)
 
