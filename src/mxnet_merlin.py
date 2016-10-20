@@ -10,6 +10,9 @@ import os
 
 class MxnetTTs():
     def __init__(self, input_dim, output_dim, hidden_dim, batch_size, n_epoch, network_type):
+        logger = logging.getLogger()
+        logger.setLevel(logging.DEBUG)
+        logging.basicConfig(level=logging.DEBUG)
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.hidden_dim = hidden_dim
@@ -49,7 +52,7 @@ class MxnetTTs():
                                      num_epoch = self.n_epoch,
                                      learning_rate = 0.002,
                                      wd = 0.0001,
-                                     lr_scheduler=mx.lr_scheduler.FactorScheduler(10000,0.9),
+                                     lr_scheduler=mx.lr_scheduler.FactorScheduler(500000,0.9),
                                      initializer = mx.init.Xavier(factor_type="in", magnitude=2.34), momentum = 0.9)
 
         model.fit(X = train_dataiter, eval_data = val_dataiter, eval_metric = metric, batch_end_callback = mx.callback.Speedometer(self.batch_size, 256))

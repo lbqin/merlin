@@ -5,3 +5,5 @@ build
 experiments
 deep_result
 *bak
+*.json
+*.params

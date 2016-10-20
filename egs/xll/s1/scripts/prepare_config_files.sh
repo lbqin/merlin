@@ -136,6 +136,7 @@ echo "" >> $duration_config_file
 echo "# Main processes" >> $duration_config_file
 echo "" >> $duration_config_file
 echo "DurationModel : True" >> $duration_config_file
+echo "framework : ${framework}" >> $duration_config_file
 
 echo "" >> $duration_config_file
 echo "# sub-processes" >> $duration_config_file
@@ -345,6 +346,7 @@ echo "# Main processes" >> $acoustic_config_file
 
 echo "" >> $acoustic_config_file
 echo "AcousticModel : True" >> $acoustic_config_file
+echo "framework : ${framework}" >> $acoustic_config_file
 
 echo "" >> $acoustic_config_file
 echo "# sub-processes" >> $acoustic_config_file

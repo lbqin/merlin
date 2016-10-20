@@ -49,6 +49,7 @@ echo "Voice=${voice_name}" >> $global_config_file
 echo "Labels=state_align" >> $global_config_file
 echo "Vocoder=WORLD" >> $global_config_file
 echo "SamplingFreq=48000" >> $global_config_file
+echo 'framework=mxnet' >> $global_config_file
 
 if [ "$voice_name" == "xll" ]
 then
