@@ -738,16 +738,16 @@ def main_function(cfg):
         try:
             if cfg.framework == 'mxnet':
                 hidden_dim = 512
-                network_type = 'duration'
+                output_type = 'duration'
                 batch_size = 64
                 sequential_training = False
                 if cfg.AcousticModel:
-                    network_type = 'acoustic'
-                    hidden_dim = 1024
+                    output_type = 'acoustic'
+                    hidden_dim = 512
                     batch_size = 256
                 else:
-                    network_type = 'duration'
-                    hidden_dim = 512
+                    output_type = 'duration'
+                    hidden_dim = 256
                     batch_size = 64
                 n_ins = lab_dim
                 n_outs = cfg.cmp_dim
@@ -756,7 +756,7 @@ def main_function(cfg):
                 n_epoch = 25
                 train_dataiter = TTSIter(x_file_list = train_x_file_list, y_file_list = train_y_file_list, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
                 val_dataiter = TTSIter(x_file_list = valid_x_file_list, y_file_list = valid_y_file_list, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
-                model_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, network_type)
+                model_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, output_type)
                 model_dnn.train(train_dataiter, val_dataiter)
                 print "model train ok"
 

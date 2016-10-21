@@ -9,7 +9,7 @@ import sys
 import os
 
 class MxnetTTs():
-    def __init__(self, input_dim, output_dim, hidden_dim, batch_size, n_epoch, network_type):
+    def __init__(self, input_dim, output_dim, hidden_dim, batch_size, n_epoch, output_type):
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
         logging.basicConfig(level=logging.DEBUG)
@@ -17,7 +17,7 @@ class MxnetTTs():
         self.output_dim = output_dim
         self.hidden_dim = hidden_dim
         self.n_epoch = n_epoch
-        self.network_type = network_type
+        self.output_type = output_type
         self.batch_size = batch_size
         self.network = self.get_net(self.input_dim, self.output_dim, self.hidden_dim)
         print self.network.list_arguments()
@@ -47,16 +47,36 @@ class MxnetTTs():
         train_dataiter.reset()
         metric = mx.metric.create('mse')
         devs = mx.gpu()
+        if self.output_type == 'duration':
+            step = 10000
+        else:
+            step = 1000000
+        stop_factor_lr = 1e-6
+        lr = mx.lr_scheduler.FactorScheduler(step=step, factor=.9, stop_factor_lr=stop_factor_lr)
+        optimizer = mx.optimizer.SGD(
+                learning_rate = 0.002,
+                wd = 0.0005,
+                momentum=0.9,
+                clip_gradient = 5.0,
+                lr_scheduler = lr)
+
+        #optimizer = mx.optimizer.Adam(
+        #        learning_rate = 0.002,
+        #        wd = 0.0005,
+        #        beta1 = 0.5,
+        #        clip_gradient = 5.0,
+        #        lr_scheduler = lr,
+        #        )
+
+        initializer = mx.init.Xavier(factor_type="in", magnitude=2.34)
         model = mx.model.FeedForward(ctx = devs,
-                                     symbol = self.network,
-                                     num_epoch = self.n_epoch,
-                                     learning_rate = 0.002,
-                                     wd = 0.0001,
-                                     lr_scheduler=mx.lr_scheduler.FactorScheduler(500000,0.9),
-                                     initializer = mx.init.Xavier(factor_type="in", magnitude=2.34), momentum = 0.9)
+             symbol = self.network,
+             num_epoch = self.n_epoch,
+             optimizer = optimizer,
+             initializer = initializer)
 
         model.fit(X = train_dataiter, eval_data = val_dataiter, eval_metric = metric, batch_end_callback = mx.callback.Speedometer(self.batch_size, 256))
-        model.save(self.network_type, 0)
+        model.save(self.output_type, 0)
 
 class SimpleBatch(object):
     def __init__(self, data_names, data, label_names, label):
@@ -77,13 +97,13 @@ class SimpleBatch(object):
 
 class TTSIter(mx.io.DataIter):
     def __init__(self, x_file_list, y_file_list, n_ins=0, n_outs=0, batch_size=100,
-                 sequential=False, network_type=None, shuffle=False):
+                 sequential=False, output_type=None, shuffle=False):
         self.n_ins = n_ins
         self.n_outs = n_outs
         self.batch_size = batch_size
         self.buffer_size = 2000000
         self.sequential = sequential
-        self.network_type = network_type
+        self.output_type = output_type
         self.buffer_size = int(self.buffer_size / self.batch_size) * batch_size
 
         # remove potential empty lines and end of line signs
@@ -538,9 +558,9 @@ if __name__ == '__main__':
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
     logging.basicConfig(level=logging.DEBUG)
-    test_generation()
-    exit()
-    train_type = "duration"
+    #test_generation()
+    #exit()
+    train_type = "acoustic"
     if train_type == 'duration':
         input_dim = 416
         output_dim = 5
@@ -548,17 +568,17 @@ if __name__ == '__main__':
         batch_size = 64
         n_epoch = 25
         train_dataiter, val_dataiter = setting_duration(input_dim, output_dim, batch_size)
-        network_type = 'duration'
-        duration_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, network_type)
+        output_type = 'duration'
+        duration_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, output_type)
         duration_dnn.train(train_dataiter, val_dataiter)
     else:
         input_dim = 425
         output_dim = 187
-        hidden_dim = 1024
+        hidden_dim = 512
         n_epoch = 25
         batch_size = 256
         train_dataiter, val_dataiter = setting_acoustic(input_dim, output_dim, batch_size)
-        network_type = 'acoustic'
-        acoustic_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, network_type)
+        output_type = 'acoustic'
+        acoustic_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, output_type)
         acoustic_dnn.train(train_dataiter, val_dataiter)
 
