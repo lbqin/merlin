@@ -276,6 +276,11 @@ def generate_wav(gen_dir, file_id_list, cfg):
             
             run_process('rm -f {sp} {f0}'.format(sp=files['sp'],f0=files['f0']))
 
+        elif cfg.vocoder_type == 'mlsa':
+            mlsa_cmd = '/home/sooda/speech/merlin/egs/mlsa/s1/mlsaSynWithFilenames /home/sooda/speech/merlin/egs/mlsa/s1/mix_excitation_5filters_199taps_48Kz.txt {mgc} {lf0} {bap} {wav} 1 {sr}'.format(mgc=files['mgc'], lf0=files['lf0'], bap=files['bap'], sr=cfg.sr, wav=files['wav'])
+            #mlsa_cmd = '/home/sooda/speech/merlin/egs/mlsa/s1/mlsaSynWithFilenames /home/sooda/speech/merlin/egs/mlsa/s1/mix_excitation_5filters_199taps_48Kz.txt {mgc} {lf0} {bap} {wav} 1 {sr}'.format(mgc=mgc_file_name, lf0=files['lf0'], bap=files['bap'], sr=cfg.sr, wav=files['wav'])
+            print mlsa_cmd
+            run_process(mlsa_cmd)
         else:
         
             logger.critical('The vocoder %s is not supported yet!\n' % cfg.vocoder_type )
