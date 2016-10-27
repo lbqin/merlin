@@ -86,5 +86,5 @@ for i in `awk -v lst="$1" 'BEGIN{if (lst ~ /^scp/) sub("[^:]+:[[:space:]]*","", 
     count=`echo "0.025 * $SAMPFREQ" | $BC -l`;
     $STEP -l `printf "%.0f" $count` | $X2X +fs > $tmpdir/str$job.tail;
     cat $tmpdir/str$job.head $raw $tmpdir/str$job.tail > $tmpdir/str$job;
-    $TCLSH get_str.tcl -l -H $UPPERF0 -L $LOWERF0 -p $FRAMESHIFT -r $SAMPFREQ -f $STRFILTERNAME -n $STRORDER $tmpdir/str$job > $outdir/$featname
+    $TCLSH get_str.tcl -l -H $UPPERF0 -L $LOWERF0 -p $FRAMESHIFT -r $SAMPFREQ -f $STRFILTERNAME -n $STRORDER $tmpdir/str$job | $X2X +af > $outdir/$featname
 done
