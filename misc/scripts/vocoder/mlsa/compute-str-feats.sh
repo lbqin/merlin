@@ -1,9 +1,6 @@
 #!/bin/sh
 # Generates marytts str from a list of wav file.
 
-export KALDI_ROOT=/home/sooda/speech/kaldi
-export tooldir=$KALDI_ROOT/tools/SPTK/bin
-
 help_message="Usage: ./compute-str-feats.sh [options] scp:<in.scp> <wspecifier>\n\tcf. top of file for list of options."
 
 STRFILTERNAME=mix_excitation_5filters_199taps_48Kz.txt

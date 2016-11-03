@@ -1,9 +1,5 @@
 #!/bin/sh
 # Generates marytts mgc from a list of wav file.
-
-export KALDI_ROOT=/home/sooda/speech/kaldi
-export tooldir=$KALDI_ROOT/tools/SPTK/bin
-
 help_message="Usage: ./compute-mgc-feats.sh [options] scp:<in.scp> <wspecifier>\n\tcf. top of file for list of options."
 
 AWK=gawk

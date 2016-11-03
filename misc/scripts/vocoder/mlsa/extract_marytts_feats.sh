@@ -1,4 +1,6 @@
-corpus_dir=/home/sooda/data/tts/xll_48k/
+export tooldir=/home/sooda/speech/kaldi/tools/SPTK/bin
+
+corpus_dir=/home/sooda/data/tts/labixx_48k/
 audio_dir=$corpus_dir/wav 
 cppmary_base=/home/sooda/speech/cppmary/
 cppmary_bin=$cppmary_base/build/
