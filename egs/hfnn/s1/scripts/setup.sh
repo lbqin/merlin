@@ -53,9 +53,9 @@ echo "SamplingFreq=48000" >> $global_config_file
 if [ "$voice_name" == "hfnn" ]
 then
     echo "FileIDList=basename.scp" >> $global_config_file
-    echo "Train=900" >> $global_config_file 
-    echo "Valid=120" >> $global_config_file 
-    echo "Test=10" >> $global_config_file 
+    echo "Train=1800" >> $global_config_file 
+    echo "Valid=230" >> $global_config_file 
+    echo "Test=15" >> $global_config_file 
 else
     echo "The data for voice name ($voice_name) is not available...please use hfnn !!"
     exit 1

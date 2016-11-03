@@ -47,7 +47,7 @@ echo "MerlinDir=${merlin_dir}" >  $global_config_file
 echo "WorkDir=${current_working_dir}" >>  $global_config_file
 echo "Voice=${voice_name}" >> $global_config_file
 echo "Labels=state_align" >> $global_config_file
-echo "Vocoder=WORLD" >> $global_config_file
+echo "Vocoder=mlsa" >> $global_config_file
 echo "SamplingFreq=48000" >> $global_config_file
 echo 'framework=mxnet' >> $global_config_file
 

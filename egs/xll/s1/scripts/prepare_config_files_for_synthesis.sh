@@ -251,26 +251,10 @@ fi
 echo "" >> $acoustic_config_file
 echo "" >> $acoustic_config_file
 echo "[Outputs]" >> $acoustic_config_file
-echo "mgc    : 60" >> $acoustic_config_file
-echo "dmgc   : 180" >> $acoustic_config_file
-
-if [ "$Vocoder" == "STRAIGHT" ]
-then
-    echo "bap    : 25" >> $acoustic_config_file
-    echo "dbap   : 75" >> $acoustic_config_file
-elif [ "$Vocoder" == "WORLD" ]
-then
-    if [ "$SamplingFreq" == "16000" ]
-    then
-        echo "bap    : 1" >> $acoustic_config_file
-        echo "dbap   : 3" >> $acoustic_config_file
-    elif [ "$SamplingFreq" == "48000" ]
-    then
-        echo "bap    : 5" >> $acoustic_config_file
-        echo "dbap   : 15" >> $acoustic_config_file
-    fi
-fi
-
+echo "mgc    : 35" >> $acoustic_config_file
+echo "dmgc   : 105" >> $acoustic_config_file
+echo "bap    : 5" >> $acoustic_config_file
+echo "dbap   : 15" >> $acoustic_config_file
 echo "lf0    : 1" >> $acoustic_config_file
 echo "dlf0   : 3" >> $acoustic_config_file
 
