@@ -683,6 +683,13 @@ def main_function(cfg):
             logger.info('saved %s variance vector to %s' %(feature_name, var_file_dict[feature_name]))
 
             feature_index += cfg.out_dimension_dict[feature_name]
+        total_var_file = os.path.join(var_dir, 'total_var')
+        fid = open(total_var_file, 'w')
+        total_var = numpy.array(global_std_vector[:,:], 'float32')
+        total_var = total_var**2
+        total_var.tofile(fid)
+        logger.info('saved total variance vector to %s' %(total_var_file))
+        fid.close()
 
     train_x_file_list = nn_label_norm_file_list[0:cfg.train_file_number]
     train_y_file_list = nn_cmp_norm_file_list[0:cfg.train_file_number]
