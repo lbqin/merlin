@@ -464,6 +464,11 @@ def main_function(cfg):
 
     try:
         file_id_list = read_file_list(cfg.file_id_scp)
+        total_num = len(file_id_list)
+        if cfg.train_file_number < 0 :
+            cfg.train_file_number = int(total_num * 0.9)
+            cfg.valid_file_number = int(total_num * 0.1)
+            logger.debug('###### train valid patition: %d : %d' % (cfg.train_file_number, cfg.valid_file_number))
         logger.debug('Loaded file id list from %s' % cfg.file_id_scp)
     except IOError:
         # this means that open(...) threw an error
@@ -502,6 +507,12 @@ def main_function(cfg):
     if cfg.label_style == 'cppmary':
         suffix = 'cppmary'
         lab_dim = 546
+        if cfg.AcousticModel:
+            lab_dim = 555
+        elif cfg.DurationModel:
+            lab_dim = 546
+        else:
+            raise
     else:
         raise
 
@@ -618,8 +629,7 @@ def main_function(cfg):
             global_mean_vector = normaliser.compute_mean(nn_cmp_file_list[0:cfg.train_file_number], 0, cfg.cmp_dim)
             global_std_vector = normaliser.compute_std(nn_cmp_file_list[0:cfg.train_file_number], global_mean_vector, 0, cfg.cmp_dim)
 
-            normaliser.feature_normalisation(nn_cmp_file_list[0:cfg.train_file_number+cfg.valid_file_number],
-                                             nn_cmp_norm_file_list[0:cfg.train_file_number+cfg.valid_file_number])
+            normaliser.feature_normalisation(nn_cmp_file_list, nn_cmp_norm_file_list)
             cmp_norm_info = numpy.concatenate((global_mean_vector, global_std_vector), axis=0)
 
         elif cfg.output_feature_normalisation == 'MINMAX':
@@ -657,6 +667,13 @@ def main_function(cfg):
             logger.info('saved %s variance vector to %s' %(feature_name, var_file_dict[feature_name]))
 
             feature_index += cfg.out_dimension_dict[feature_name]
+        total_var_file = os.path.join(var_dir, 'total_var')
+        fid = open(total_var_file, 'w')
+        total_var = numpy.array(global_std_vector[:,:], 'float32')
+        total_var = total_var**2
+        total_var.tofile(fid)
+        logger.info('saved total variance vector to %s' %(total_var_file))
+        fid.close()
 
     train_x_file_list = nn_label_norm_file_list[0:cfg.train_file_number]
     train_y_file_list = nn_cmp_norm_file_list[0:cfg.train_file_number]

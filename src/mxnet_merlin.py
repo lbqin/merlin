@@ -101,10 +101,12 @@ class TTSIter(mx.io.DataIter):
         self.n_ins = n_ins
         self.n_outs = n_outs
         self.batch_size = batch_size
-        self.buffer_size = 2000000
+        self.buffer_size = 5000
         self.sequential = sequential
         self.output_type = output_type
         self.buffer_size = int(self.buffer_size / self.batch_size) * batch_size
+        self.n_train_batchs = 0
+        self.batch_index = 0
 
         # remove potential empty lines and end of line signs
         try:
@@ -144,11 +146,13 @@ class TTSIter(mx.io.DataIter):
 
         self.remain_data_x = np.empty((0, self.n_ins))
         self.remain_data_y = np.empty((0, self.n_outs))
-        self.provide_data = [('data', (batch_size, n_ins))]
-        self.provide_label = [('label', (batch_size, n_outs))]
         self.remain_frame_number = 0
         self.end_reading = False
         logging.info('initialised')
+        self._data = None
+        self._label = None
+        self._get_batch()
+
 
 
     def __iter__(self):
@@ -170,6 +174,38 @@ class TTSIter(mx.io.DataIter):
 
                 yield SimpleBatch(data_names, data_all, label_names, label_all)
 
+    def _get_batch(self):
+        if self.n_train_batchs == 0  or self.batch_index == self.n_train_batchs-1 :
+            self.temp_train_set_x, self.temp_train_set_y = self.load_one_partition()
+            self.n_train_batchs = self.temp_train_set_x.shape[0] / self.batch_size
+            self.batch_index = 0
+        prev_index = self.batch_index * self.batch_size
+        back_index = (self.batch_index + 1) * self.batch_size
+        self._data = {'data' : mx.nd.array(self.temp_train_set_x[prev_index:back_index])}
+        self._label = {'label' : mx.nd.array(self.temp_train_set_y[prev_index:back_index])}
+        self.batch_index += 1
+        #print self.batch_index
+
+    def iter_next(self):
+        return not self.is_finish()
+
+    def next(self):
+        if self.iter_next():
+            self._get_batch()
+            data_batch = mx.io.DataBatch(data=self._data.values(),
+                                   label=self._label.values(),
+                                   pad=self.getpad(), index=self.getindex())
+            return data_batch
+        else:
+            raise StopIteration
+
+    @property
+    def provide_data(self):
+        return [(k, v.shape) for k, v in self._data.items()]
+
+    @property
+    def provide_label(self):
+        return [(k, v.shape) for k, v in self._label.items()]
 
     def reset(self):
         """When all the files in the file list have been used for DNN training, reset the data provider to start a new epoch.
