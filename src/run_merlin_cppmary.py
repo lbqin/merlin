@@ -774,7 +774,29 @@ def main_function(cfg):
                 train_dataiter = TTSIter(x_file_list = train_x_file_list, y_file_list = train_y_file_list, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
                 val_dataiter = TTSIter(x_file_list = valid_x_file_list, y_file_list = valid_y_file_list, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
                 model_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, output_type)
+                train_x_file_list1 = train_x_file_list[0:len(train_x_file_list)/2]
+                train_x_file_list2 = train_x_file_list[len(train_x_file_list)/2:]
+                train_y_file_list1 = train_y_file_list[0:len(train_y_file_list)/2]
+                train_y_file_list2 = train_y_file_list[len(train_y_file_list)/2:]
+                valid_x_file_list1 = valid_x_file_list[0:len(valid_x_file_list)/2]
+                valid_x_file_list2 = valid_x_file_list[len(valid_x_file_list)/2:]
+                valid_y_file_list1 = valid_y_file_list[0:len(valid_y_file_list)/2]
+                valid_y_file_list2 = valid_y_file_list[len(valid_y_file_list)/2:]
+                train_dataiter1 = TTSIter(x_file_list = train_x_file_list1, y_file_list = train_y_file_list1, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
+                train_dataiter2 = TTSIter(x_file_list = train_x_file_list2, y_file_list = train_y_file_list2, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
+                val_dataiter1 = TTSIter(x_file_list = valid_x_file_list1, y_file_list = valid_y_file_list1, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
+                val_dataiter2 = TTSIter(x_file_list = valid_x_file_list2, y_file_list = valid_y_file_list2, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
+
+                #train_dataiter = mx.io.PrefetchingIter([train_dataiter1, train_dataiter2], rename_data=[{'data': 'data1'}, {'data': 'data2'}])
+                #val_dataiter = mx.io.PrefetchingIter([val_dataiter1, val_dataiter2], rename_data=[{'data': 'data1'}, {'data': 'data2'}])
+                #train_dataiter = mx.io.PrefetchingIter([train_dataiter1, train_dataiter2], rename_data = [{'data': 'data1'}, {'data': 'data2'}], rename_label = [{'label': 'label1'}, {'label': 'label2'}])
+                #val_dataiter = mx.io.PrefetchingIter([val_dataiter1, val_dataiter2], rename_data = [{'data': 'data1'}, {'data': 'data2'}], rename_label = [{'label': 'label1'}, {'label': 'label2'}])
+                #train_dataiter = mx.io.PrefetchingIter([train_dataiter1, train_dataiter2])
+                #val_dataiter = mx.io.PrefetchingIter([val_dataiter1, val_dataiter2])
+                train_dataiter = mx.io.PrefetchingIter(train_dataiter1)
+                val_dataiter = mx.io.PrefetchingIter(val_dataiter1)
                 model_dnn.train(train_dataiter, val_dataiter)
+                #model_dnn.train(train_dataiter1, val_dataiter1)
                 print "model train ok"
 
             else:
