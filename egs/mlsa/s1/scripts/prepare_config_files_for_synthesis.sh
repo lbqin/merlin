@@ -225,7 +225,8 @@ echo "" >> $acoustic_config_file
 echo "[Labels]" >> $acoustic_config_file
 
 echo "" >> $acoustic_config_file
-echo "enforce_silence : True" >> $acoustic_config_file
+echo "do_post_filtering: False" >> $acoustic_config_file
+echo "enforce_silence : False" >> $acoustic_config_file
 echo "silence_pattern : ['*-sil+*']" >> $acoustic_config_file
 echo "label_type : ${Labels}" >> $acoustic_config_file
 echo "label_style: cppmary" >> $acoustic_config_file

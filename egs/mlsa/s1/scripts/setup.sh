@@ -22,9 +22,9 @@ mkdir -p ${acoustic_dir}
 mkdir -p ${duration_dir}
 mkdir -p ${synthesis_dir}
 
-if [ "$voice_name" == "xll" ]
+if [ "$voice_name" == "hfnn" ]
 then
-    data_dir=xll_data
+    data_dir=hfnn_data
 else
     echo "The data for voice name ($voice_name) is not available...please use labixx!!"
     exit 1
@@ -51,12 +51,12 @@ echo "Vocoder=mlsa" >> $global_config_file
 echo "SamplingFreq=48000" >> $global_config_file
 echo 'framework=mxnet' >> $global_config_file
 
-if [ "$voice_name" == "xll" ]
+if [ "$voice_name" == "hfnn" ]
 then
     echo "FileIDList=basename.scp" >> $global_config_file
-    echo "Train=3300" >> $global_config_file 
-    echo "Valid=300" >> $global_config_file 
-    echo "Test=20" >> $global_config_file 
+    echo "Train=1800" >> $global_config_file 
+    echo "Valid=230" >> $global_config_file 
+    echo "Test=15" >> $global_config_file 
 else
     echo "The data for voice name ($voice_name) is not available...please use labixx !!"
     exit 1

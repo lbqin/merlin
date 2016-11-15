@@ -1,9 +1,6 @@
 #!/bin/sh
 # Generates marytts lf0 from a list of wav file.
 
-export KALDI_ROOT=/home/sooda/speech/kaldi
-export tooldir=$KALDI_ROOT/tools/SPTK/bin
-
 help_message="Usage: ./compute-lf0-feats.sh [options] scp:<in.scp> <wspecifier>\n\tcf. top of file for list of options."
 
 tmpdir=/tmp

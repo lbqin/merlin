@@ -441,6 +441,32 @@ def dnn_hidden_generation(valid_file_list, nnets_file_name, n_ins, n_outs, out_f
         logger.debug('saved to %s' % out_file_list[i])
         fid.close()
 
+def make_equal(in_file_list, ref_file_list, in_feature_dim, ref_feature_dim):
+    io_funcs = BinaryIOCollection()
+    utt_number = len(in_file_list)
+
+    for i in xrange(utt_number):
+        in_file_name = in_file_list[i]
+        in_features, in_frame_number = io_funcs.load_binary_file_frame(in_file_name, in_feature_dim)
+
+        ref_file_name = ref_file_list[i]
+        ref_features, ref_frame_number = io_funcs.load_binary_file_frame(ref_file_name, ref_feature_dim)
+
+        print in_file_name, in_frame_number, ref_file_name, ref_frame_number
+
+        target_features = numpy.zeros((ref_frame_number, in_feature_dim))
+        if in_frame_number == ref_frame_number:
+            continue;
+        elif in_frame_number > ref_frame_number:
+            target_features[0:ref_frame_number, ] = in_features[0:ref_frame_number, ]
+            print ref_frame_number, in_file_name
+            io_funcs.array_to_binary_file(target_features, in_file_name)
+        elif in_frame_number < ref_frame_number:
+            target_features[0:in_frame_number, ] = ref_features[0:in_frame_number, ]
+            print in_frame_number, ref_file_name
+            io_funcs.array_to_binary_file(target_features, ref_file_name)
+
+
 
 def main_function(cfg):
 
@@ -682,6 +708,7 @@ def main_function(cfg):
     gen_file_id_list = file_id_list[cfg.train_file_number+cfg.valid_file_number:cfg.train_file_number+cfg.valid_file_number+cfg.test_file_number]
     test_x_file_list  = nn_label_norm_file_list[cfg.train_file_number+cfg.valid_file_number:cfg.train_file_number+cfg.valid_file_number+cfg.test_file_number]
 
+    #make_equal(nn_label_norm_file_list, nn_cmp_norm_file_list, 555, 124)
     # total_index = range(len(nn_label_norm_file_list))
     # test_portion = 0.1
     # valid_portion = 0.1
@@ -726,6 +753,7 @@ def main_function(cfg):
                         combined_model_arch, lab_dim, cfg.cmp_dim, cfg.train_file_number, cfg.hyper_params['learning_rate'])
 
 
+
     ### DNN model training
     if cfg.TRAINDNN:
 
@@ -760,20 +788,22 @@ def main_function(cfg):
                 sequential_training = False
                 if cfg.AcousticModel:
                     output_type = 'acoustic'
-                    hidden_dim = 512
+                    hidden_dim = 1024
                     batch_size = 256
                 else:
                     output_type = 'duration'
-                    hidden_dim = 256
+                    hidden_dim = 512
                     batch_size = 64
                 n_ins = lab_dim
                 n_outs = cfg.cmp_dim
                 input_dim = n_ins
                 output_dim = n_outs
                 n_epoch = 25
-                train_dataiter = TTSIter(x_file_list = train_x_file_list, y_file_list = train_y_file_list, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
-                val_dataiter = TTSIter(x_file_list = valid_x_file_list, y_file_list = valid_y_file_list, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
                 model_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, output_type)
+                # train_dataiter = TTSIter(x_file_list = train_x_file_list, y_file_list = train_y_file_list, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
+                # val_dataiter = TTSIter(x_file_list = valid_x_file_list, y_file_list = valid_y_file_list, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
+                # model_dnn.train(train_dataiter, val_dataiter)
+                
                 train_x_file_list1 = train_x_file_list[0:len(train_x_file_list)/2]
                 train_x_file_list2 = train_x_file_list[len(train_x_file_list)/2:]
                 train_y_file_list1 = train_y_file_list[0:len(train_y_file_list)/2]

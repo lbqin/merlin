@@ -1,9 +1,6 @@
 #!/bin/sh
 # Generates marytts str from a list of wav file.
 
-export KALDI_ROOT=/home/sooda/speech/kaldi
-export tooldir=$KALDI_ROOT/tools/SPTK/bin
-
 help_message="Usage: ./compute-str-feats.sh [options] scp:<in.scp> <wspecifier>\n\tcf. top of file for list of options."
 
 STRFILTERNAME=mix_excitation_5filters_199taps_48Kz.txt
@@ -78,7 +75,7 @@ fi
 for i in `awk -v lst="$1" 'BEGIN{if (lst ~ /^scp/) sub("[^:]+:[[:space:]]*","", lst); while (getline < lst) print $1 "___" $2}'`; do
     name=${i%%___*}
     wfilename=${i##*___}
-    featname=`basename $wfilename .wav`.str
+    featname=`basename $wfilename .wav`.bap
     raw=$tmpdir/str$job.raw
     sox $wfilename $raw
     count=`echo "0.005 * $SAMPFREQ" | $BC -l`;

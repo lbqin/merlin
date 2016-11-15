@@ -38,7 +38,8 @@ class MxnetTTs():
         act5 = mx.symbol.Activation(fc5, name='tanh5', act_type="tanh")
         fc6 = mx.symbol.FullyConnected(act5, name='fc6', num_hidden=hidden_dim)
         act6 = mx.symbol.Activation(fc6, name='tanh6', act_type="tanh")
-        fc7 = mx.symbol.FullyConnected(act5, name='fc7', num_hidden=output_dim)
+        #dropout = mx.sym.Dropout(data=act6, p=0.25)
+        fc7 = mx.symbol.FullyConnected(act6, name='fc7', num_hidden=output_dim)
         linear = mx.symbol.LinearRegressionOutput(data=fc7, name="linear",label=label)
         #mx.viz.plot_network(linear).render()
         return linear
@@ -50,11 +51,11 @@ class MxnetTTs():
         if self.output_type == 'duration':
             step = 10000
         else:
-            step = 1000000
+            step = 100000
         stop_factor_lr = 1e-6
         lr = mx.lr_scheduler.FactorScheduler(step=step, factor=.9, stop_factor_lr=stop_factor_lr)
         optimizer = mx.optimizer.SGD(
-                learning_rate = 0.002,
+                learning_rate = 0.001,
                 wd = 0.0005,
                 momentum=0.9,
                 clip_gradient = 5.0,
@@ -152,6 +153,13 @@ class TTSIter(mx.io.DataIter):
         self._data = None
         self._label = None
         self._get_batch()
+        # load all data in the same time
+        #if output_type == 'duration':
+        #    self.buffer_size = 600000
+        #else:
+        #    self.buffer_size = 4000000
+        #self.train_x_all, self.train_y_all = self.load_one_partition()
+        #logging.info('load all data %d' % self.train_x_all.shape[0])
 
 
 
@@ -162,6 +170,7 @@ class TTSIter(mx.io.DataIter):
             batch_size = self.batch_size
             temp_train_set_x, temp_train_set_y = self.load_one_partition()
             n_train_batches = temp_train_set_x.shape[0] / batch_size
+            print 'load data... %d', temp_train_set_x.shape[0]
             for index in xrange(n_train_batches):
                 # print data_value.shape, temp_train_set_x.shape
                 data_value[:] = temp_train_set_x[index*batch_size : (index+1)*batch_size]
@@ -171,7 +180,6 @@ class TTSIter(mx.io.DataIter):
                 label_all = [label_value]
                 data_names = ['data']
                 label_names = ['label']
-
                 yield SimpleBatch(data_names, data_all, label_names, label_all)
 
     def _get_batch(self):
@@ -207,6 +215,22 @@ class TTSIter(mx.io.DataIter):
     def provide_label(self):
         return [(k, v.shape) for k, v in self._label.items()]
 
+    #def __iter__(self):
+    #    data_value = mx.nd.empty((self.batch_size, self.n_ins))
+    #    label_value = mx.nd.empty((self.batch_size, self.n_outs))
+    #    batch_size = self.batch_size
+    #    n_train_batches = self.train_x_all.shape[0] / batch_size
+    #    for index in xrange(n_train_batches):
+    #        data_value[:] = self.train_x_all[index*batch_size : (index+1)*batch_size]
+    #        label_value[:] = self.train_y_all[index*batch_size : (index+1)*batch_size]
+    #        data_all = [data_value]
+    #        label_all = [label_value]
+    #        data_names = ['data']
+    #        label_names = ['label']
+
+    #        yield SimpleBatch(data_names, data_all, label_names, label_all)
+
+
     def reset(self):
         """When all the files in the file list have been used for DNN training, reset the data provider to start a new epoch.
 
@@ -232,6 +256,7 @@ class TTSIter(mx.io.DataIter):
             temp_set_x, temp_set_y = self.load_one_block()
 
         return temp_set_x, temp_set_y
+
 
     def load_next_utterance(self):
         """Load the data for one utterance. This function will be called when utterance-by-utterance loading is required (e.g., sequential training).

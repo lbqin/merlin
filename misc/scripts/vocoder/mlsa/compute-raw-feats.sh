@@ -1,10 +1,6 @@
 #!/bin/sh
 # Generates marytts lf0 from a list of wav file.
 
-export KALDI_ROOT=/home/sooda/speech/kaldi
-export tooldir=$KALDI_ROOT/tools/SPTK/bin
-
-
 srate=16000
 job=1
 . ./parse_options.sh
