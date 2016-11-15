@@ -128,7 +128,7 @@ class TTSIter(mx.io.DataIter):
         self.n_ins = n_ins
         self.n_outs = n_outs
         self.batch_size = batch_size
-        self.buffer_size = 1024
+        self.buffer_size = 256
         self.sequential = sequential
         self.output_type = output_type
         self.buffer_size = int(self.buffer_size / self.batch_size) * batch_size
@@ -218,6 +218,8 @@ class TTSIter(mx.io.DataIter):
         self._data = {'data' : mx.nd.array(self.temp_train_set_x[prev_index:back_index])}
         self._label = {'label' : mx.nd.array(self.temp_train_set_y[prev_index:back_index])}
         self.batch_index += 1
+        if self.n_train_batchs == 0:
+            self._data = None
         #print self.batch_index
 
     def iter_next(self):
@@ -226,6 +228,8 @@ class TTSIter(mx.io.DataIter):
     def next(self):
         if self.iter_next():
             self._get_batch()
+            if self.n_train_batchs == 0: #the last iterator is not full
+                raise StopIteration
             data_batch = mx.io.DataBatch(data=self._data.values(),
                                    label=self._label.values(),
                                    pad=self.getpad(), index=self.getindex())
