@@ -41,6 +41,32 @@ class MxnetTTs():
         #dropout = mx.sym.Dropout(data=act6, p=0.25)
         fc7 = mx.symbol.FullyConnected(act6, name='fc7', num_hidden=output_dim)
         linear = mx.symbol.LinearRegressionOutput(data=fc7, name="linear",label=label)
+        #net = mx.symbol.FullyConnected(data, name='fc1', num_hidden=hidden_dim)
+        #net = mx.sym.BatchNorm(net, fix_gamma=False)
+        #net = mx.symbol.Activation(net, name='relu1', act_type="relu")
+        #net = mx.sym.Dropout(data=net, p=0.25)
+        #net = mx.symbol.FullyConnected(net, name='fc2', num_hidden=hidden_dim)
+        #net = mx.sym.BatchNorm(net, fix_gamma=False)
+        #net = mx.symbol.Activation(net, name='relu2', act_type="relu")
+        #net = mx.symbol.FullyConnected(net, name='fc3', num_hidden=hidden_dim)
+        #net = mx.sym.BatchNorm(net, fix_gamma=False)
+        #net = mx.symbol.Activation(net, name='relu3', act_type="relu")
+        #net = mx.sym.Dropout(data=net, p=0.25)
+        #net = mx.symbol.FullyConnected(net, name='fc4', num_hidden=hidden_dim)
+        #net = mx.sym.BatchNorm(net, fix_gamma=False)
+        #net = mx.symbol.Activation(net, name='relu4', act_type="relu")
+        #net = mx.symbol.FullyConnected(net, name='fc5', num_hidden=hidden_dim)
+        #net = mx.sym.BatchNorm(net, fix_gamma=False)
+        #net = mx.symbol.Activation(net, name='relu5', act_type="relu")
+        #net = mx.symbol.FullyConnected(net, name='fc6', num_hidden=hidden_dim)
+        #net = mx.sym.BatchNorm(net, fix_gamma=False)
+        #net = mx.symbol.Activation(net, name='relu6', act_type="relu")
+        #net = mx.sym.Dropout(data=net, p=0.25)
+        #net = mx.symbol.FullyConnected(net, name='fc7', num_hidden=hidden_dim)
+        #net = mx.sym.BatchNorm(net, fix_gamma=False)
+        #net = mx.symbol.Activation(net, name='relu7', act_type="relu")
+        #net = mx.symbol.FullyConnected(net, name='fc8', num_hidden=output_dim)
+        #linear = mx.symbol.LinearRegressionOutput(data=net, name="linear",label=label)
         #mx.viz.plot_network(linear).render()
         return linear
 
@@ -102,7 +128,7 @@ class TTSIter(mx.io.DataIter):
         self.n_ins = n_ins
         self.n_outs = n_outs
         self.batch_size = batch_size
-        self.buffer_size = 5000
+        self.buffer_size = 1024
         self.sequential = sequential
         self.output_type = output_type
         self.buffer_size = int(self.buffer_size / self.batch_size) * batch_size
@@ -325,7 +351,7 @@ class TTSIter(mx.io.DataIter):
 
         """
 
-        logging.info('loading one block')
+        #logging.info('loading one block')
 
         temp_set_x = np.empty((self.buffer_size, self.n_ins))
         temp_set_y = np.empty((self.buffer_size, self.n_outs))
@@ -333,11 +359,18 @@ class TTSIter(mx.io.DataIter):
 
         ### first check whether there are remaining data from previous utterance
         if self.remain_frame_number > 0:
-            temp_set_x[current_index:self.remain_frame_number, ] = self.remain_data_x
-            temp_set_y[current_index:self.remain_frame_number, ] = self.remain_data_y
-            current_index += self.remain_frame_number
-
-            self.remain_frame_number = 0
+            if self.remain_data_x.shape[0] > self.buffer_size:
+                temp_set_x[:, ] = self.remain_data_x[0:self.buffer_size, ]
+                temp_set_y[:, ] = self.remain_data_y[0:self.buffer_size, ]
+                self.remain_data_x = self.remain_data_x[self.buffer_size:, ]
+                self.remain_data_y = self.remain_data_y[self.buffer_size:, ]
+                self.remain_frame_number = self.remain_data_x.shape[0]
+                current_index += self.buffer_size
+            else:
+                temp_set_x[current_index:self.remain_frame_number, ] = self.remain_data_x
+                temp_set_y[current_index:self.remain_frame_number, ] = self.remain_data_y
+                current_index += self.remain_frame_number
+                self.remain_frame_number = 0
 
         io_fun = BinaryIOCollection()
         while True:
