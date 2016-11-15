@@ -209,7 +209,7 @@ class TTSIter(mx.io.DataIter):
                 yield SimpleBatch(data_names, data_all, label_names, label_all)
 
     def _get_batch(self):
-        if self.n_train_batchs == 0  or self.batch_index == self.n_train_batchs-1 :
+        if self.n_train_batchs == 0 or self.batch_index == self.n_train_batchs :
             self.temp_train_set_x, self.temp_train_set_y = self.load_one_partition()
             self.n_train_batchs = self.temp_train_set_x.shape[0] / self.batch_size
             self.batch_index = 0
