@@ -41,6 +41,7 @@
 from io_funcs.binary_io import BinaryIOCollection
 import  logging
 import  numpy
+import os
 
 from feature_normalisation_base import FeatureNormBase
 
@@ -175,3 +176,35 @@ class   MeanVarianceNorm(FeatureNormBase):
         self.std_vector = std_vector
         
         return  std_vector
+
+    def compute_global_variance(self, file_list, feat_dim, save_dir):
+	logger = logging.getLogger("compute gv")
+	logger.info('computed global variance of length %d')
+
+	all_std_vector = numpy.zeros((len(file_list), feat_dim))
+
+	filenum = 0
+	io_funcs = BinaryIOCollection()
+	for file_name in file_list:
+	    features = io_funcs.load_binary_file(file_name, feat_dim)
+	    std_vector = numpy.var(features, axis=0)
+	    all_std_vector[filenum, :] = std_vector
+	    filenum = filenum + 1
+
+#compute mean and std for all_std_vectors
+	print all_std_vector.shape
+	global_mean = numpy.mean(all_std_vector, axis=0)
+	global_var = numpy.var(all_std_vector, axis=0)
+
+        gv_mean_name = os.path.join(save_dir, 'gv_mean')
+	fid = open(gv_mean_name, 'wb')
+	global_mean.tofile(fid)
+	fid.close()
+
+        gv_var_name = os.path.join(save_dir, 'gv_var')
+	fid = open(gv_var_name, 'wb')
+	global_var.tofile(fid)
+	fid.close()
+
+        print global_mean
+        print global_var

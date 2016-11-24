@@ -651,6 +651,7 @@ def main_function(cfg):
         cmp_norm_info = None
         if cfg.output_feature_normalisation == 'MVN':
             normaliser = MeanVarianceNorm(feature_dimension=cfg.cmp_dim)
+            normaliser.compute_global_variance(nn_cmp_file_list[0:cfg.train_file_number], cfg.cmp_dim, var_dir)
             ###calculate mean and std vectors on the training data, and apply on the whole dataset
             global_mean_vector = normaliser.compute_mean(nn_cmp_file_list[0:cfg.train_file_number], 0, cfg.cmp_dim)
             global_std_vector = normaliser.compute_std(nn_cmp_file_list[0:cfg.train_file_number], global_mean_vector, 0, cfg.cmp_dim)
