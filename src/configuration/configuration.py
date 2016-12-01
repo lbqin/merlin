@@ -216,9 +216,9 @@ class configuration(object):
 
             ('buffer_size', 200000, 'Data', 'buffer_size'),
 
-            ('train_file_number', impossible_int, 'Data','train_file_number'),
-            ('valid_file_number', impossible_int, 'Data','valid_file_number'),
-            ('test_file_number' , impossible_int, 'Data','test_file_number'),
+            ('train_file_number', -1, 'Data','train_file_number'),
+            ('valid_file_number', -1, 'Data','valid_file_number'),
+            ('test_file_number' , -1, 'Data','test_file_number'),
 
             ('log_path', os.path.join(self.work_dir, 'log'), 'Paths', 'log_path'),
             ('log_file', '', 'Paths','log_file'),
