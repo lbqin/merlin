@@ -70,6 +70,51 @@ class MxnetTTs():
         #mx.viz.plot_network(linear).render()
         return linear
 
+    def train_module(self, train_dataiter, val_dataiter):
+        if self.output_type == 'duration':
+            step = 10000
+        else:
+            step = 100000
+
+        train_dataiter.reset()
+        metric = mx.metric.create('mse')
+        stop_factor_lr = 1e-6
+        lr = mx.lr_scheduler.FactorScheduler(step=step, factor=.9, stop_factor_lr=stop_factor_lr)
+        initializer = mx.init.Xavier(factor_type="in", magnitude=2.34)
+        optimizer = mx.optimizer.SGD(
+            learning_rate = 0.001,
+            wd = 0.0005,
+            momentum=0.9,
+            clip_gradient = 5.0,
+            lr_scheduler = lr)
+
+        mod = mx.mod.Module(self.network, label_names=('label',))
+
+        batch_end_callbacks = [mx.callback.Speedometer(self.batch_size, 256), ]
+
+        mod.bind(data_shapes=train_dataiter.provide_data, label_shapes=train_dataiter.provide_label, for_training=True)
+        mod.init_params(initializer=initializer)
+        mod.init_optimizer(optimizer=optimizer)
+        for i_epoch in range(self.n_epoch):
+            for nbatch, data_batch in enumerate(train_dataiter):
+                mod.forward(data_batch)
+                mod.update_metric(metric, data_batch.label)
+
+                mod.backward()
+                mod.update()
+                batch_end_params = mx.model.BatchEndParam(epoch=i_epoch, nbatch=nbatch,
+                                                          eval_metric=metric,
+                                                          locals=None)
+                for callback in batch_end_callbacks:
+                    callback(batch_end_params)
+
+            for name, val in metric.get_name_value():
+                print('epoch %03d: %s=%f' % (i_epoch, name, val))
+            metric.reset()
+            train_dataiter.reset()
+            last_params = mod.get_params()
+            mx.model.save_checkpoint(self.output_type, i_epoch, mod.symbol, *last_params)
+
     def train(self, train_dataiter, val_dataiter):
         train_dataiter.reset()
         metric = mx.metric.create('mse')

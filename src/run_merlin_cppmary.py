@@ -826,8 +826,8 @@ def main_function(cfg):
                 #val_dataiter = mx.io.PrefetchingIter([val_dataiter1, val_dataiter2])
                 train_dataiter = mx.io.PrefetchingIter(train_dataiter_all)
                 val_dataiter = mx.io.PrefetchingIter(val_dataiter_all)
-                model_dnn.train(train_dataiter, val_dataiter)
-                #model_dnn.train(train_dataiter1, val_dataiter1)
+                #model_dnn.train(train_dataiter, val_dataiter)
+                model_dnn.train_module(train_dataiter, val_dataiter)
                 print "model train ok"
 
             else:
