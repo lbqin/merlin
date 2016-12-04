@@ -92,12 +92,11 @@ class MxnetTTs():
         train_dataiter.reset()
         metric = mx.metric.create('mse')
         stop_factor_lr = 1e-6
-        learning_rate = 0.001
+        learning_rate = 0.01 #学习率太大，也会导致mse爆掉（达到几百）！
         clip_gradient = 5.0
         weight_decay = 0.0005
         momentum = 0.9
-        warmup_momentum = 0.9
-        learning_rate_lower_bound = 1e-6
+        warmup_momentum = 0.3
         #lr = mx.lr_scheduler.FactorScheduler(step=step, factor=.9, stop_factor_lr=stop_factor_lr)
         lr = SimpleLRScheduler(learning_rate, momentum=warmup_momentum)
         initializer = mx.init.Xavier(factor_type="in", magnitude=2.34)
@@ -135,10 +134,10 @@ class MxnetTTs():
         for i_epoch in range(self.n_epoch):
             tic = time.time()
             metric.reset()
-            # if i_epoch > warmup_epoch:
-            #     lr.momentum = momentum
-            #     if lr.dynamic_lr > learning_rate_lower_bound:
-            #         lr.dynamic_lr = lr.dynamic_lr * 0.5
+            if i_epoch > warmup_epoch:
+                lr.momentum = momentum
+                #if lr.dynamic_lr > stop_factor_lr:
+                #    lr.dynamic_lr = lr.dynamic_lr * 0.5
             for nbatch, data_batch in enumerate(train_dataiter):
                 mod.forward(data_batch)
                 mod.update_metric(metric, data_batch.label)
