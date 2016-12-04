@@ -119,7 +119,8 @@ class MxnetTTs():
                                                  'rescale_grad': 1.0,
                                                  # #0.015625 没有显示初始化，会导致rescale_grad被初始化为这个值，使得很难收敛；1/64
                                                  # 即1/batch_size
-                                                 'wd': weight_decay})
+                                                 'wd': weight_decay},
+                               force_init=True)
 
             # 使用这种方式初始化的optimiser，mse两三百！这种情况下需要设置rescale_grad为1/batch_size
             # optimizer = mx.optimizer.SGD(
