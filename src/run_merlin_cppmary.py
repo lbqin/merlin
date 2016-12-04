@@ -491,6 +491,8 @@ def main_function(cfg):
     try:
         file_id_list = read_file_list(cfg.file_id_scp)
         total_num = len(file_id_list)
+        #random.seed(281638)
+        #random.shuffle(file_id_list)
         if cfg.train_file_number < 0 :
             cfg.train_file_number = int(total_num * 0.9)
             cfg.valid_file_number = int(total_num * 0.1)
@@ -785,7 +787,7 @@ def main_function(cfg):
             if cfg.framework == 'mxnet':
                 hidden_dim = 512
                 output_type = 'duration'
-                batch_size = 64
+                batch_size = int(cfg.hyper_params['batch_size'])
                 sequential_training = False
                 if cfg.AcousticModel:
                     output_type = 'acoustic'
@@ -794,7 +796,6 @@ def main_function(cfg):
                 else:
                     output_type = 'duration'
                     hidden_dim = 512
-                    batch_size = 64
                 n_ins = lab_dim
                 n_outs = cfg.cmp_dim
                 input_dim = n_ins

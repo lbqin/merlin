@@ -7,6 +7,19 @@ import random
 from io_funcs.binary_io import  BinaryIOCollection
 import sys
 import os
+import time
+import speechSGD
+
+
+class SimpleLRScheduler(mx.lr_scheduler.LRScheduler):
+    def __init__(self, dynamic_lr, momentum=0.3):
+        super(SimpleLRScheduler, self).__init__()
+        self.dynamic_lr = dynamic_lr
+        self.momentum = momentum
+
+    def __call__(self, num_update):
+        return self.dynamic_lr, self.momentum
+
 
 class MxnetTTs():
     def __init__(self, input_dim, output_dim, hidden_dim, batch_size, n_epoch, output_type):
@@ -79,26 +92,57 @@ class MxnetTTs():
         train_dataiter.reset()
         metric = mx.metric.create('mse')
         stop_factor_lr = 1e-6
-        lr = mx.lr_scheduler.FactorScheduler(step=step, factor=.9, stop_factor_lr=stop_factor_lr)
+        learning_rate = 0.001
+        clip_gradient = 5.0
+        weight_decay = 0.0005
+        momentum = 0.9
+        warmup_momentum = 0.9
+        learning_rate_lower_bound = 1e-6
+        #lr = mx.lr_scheduler.FactorScheduler(step=step, factor=.9, stop_factor_lr=stop_factor_lr)
+        lr = SimpleLRScheduler(learning_rate, momentum=warmup_momentum)
         initializer = mx.init.Xavier(factor_type="in", magnitude=2.34)
-        optimizer = mx.optimizer.SGD(
-            learning_rate = 0.001,
-            wd = 0.0005,
-            momentum=0.9,
-            clip_gradient = 5.0,
-            lr_scheduler = lr)
 
         mod = mx.mod.Module(self.network, label_names=('label',))
 
-        batch_end_callbacks = [mx.callback.Speedometer(self.batch_size, 256), ]
+
+        batch_end_callbacks = [mx.callback.Speedometer(self.batch_size, 64), ]
 
         mod.bind(data_shapes=train_dataiter.provide_data, label_shapes=train_dataiter.provide_label, for_training=True)
         mod.init_params(initializer=initializer)
-        mod.init_optimizer(optimizer=optimizer)
+
+        def reset_optimizer():
+            mod.init_optimizer(kvstore='device',
+                               optimizer="speechSGD",
+                               optimizer_params={'lr_scheduler': lr,
+                                                 'clip_gradient': clip_gradient,
+                                                 'momentum': momentum,
+                                                 'rescale_grad': 1.0,
+                                                 # #0.015625 没有显示初始化，会导致rescale_grad被初始化为这个值，使得很难收敛；1/64
+                                                 # 即1/batch_size
+                                                 'wd': weight_decay})
+
+            # 使用这种方式初始化的optimiser，mse两三百！这种情况下需要设置rescale_grad为1/batch_size
+            # optimizer = mx.optimizer.SGD(
+            #     wd = 0.0005,
+            #     momentum=0.9,
+            #     clip_gradient = 5.0,
+            #     lr_scheduler = lr)
+            # mod.init_optimizer(optimizer=optimizer)
+        reset_optimizer()
+        warmup_epoch = 10
+        last_acc = -float("Inf")
         for i_epoch in range(self.n_epoch):
+            tic = time.time()
+            metric.reset()
+            # if i_epoch > warmup_epoch:
+            #     lr.momentum = momentum
+            #     if lr.dynamic_lr > learning_rate_lower_bound:
+            #         lr.dynamic_lr = lr.dynamic_lr * 0.5
             for nbatch, data_batch in enumerate(train_dataiter):
                 mod.forward(data_batch)
                 mod.update_metric(metric, data_batch.label)
+                #根据准确率更改学习率，如果准确率没有提高则将学习率减半
+                # 根据epoch更改momentum. 前十个阶段warming up阶段大学习率，小momentum。后面则开始momentum减半
 
                 mod.backward()
                 mod.update()
@@ -108,12 +152,46 @@ class MxnetTTs():
                 for callback in batch_end_callbacks:
                     callback(batch_end_params)
 
-            for name, val in metric.get_name_value():
-                print('epoch %03d: %s=%f' % (i_epoch, name, val))
-            metric.reset()
+            # name_value = metric.get_name_value() #似乎存在训练总mse远高于各个平均mse
+            # for name, value in name_value:
+            #     logging.info('Epoch[%d] train-%s=%f', i_epoch, name, value)
+            toc = time.time()
+            logging.info('Epoch[%d] Time cost=%.3f', i_epoch, toc - tic)
             train_dataiter.reset()
-            last_params = mod.get_params()
-            mx.model.save_checkpoint(self.output_type, i_epoch, mod.symbol, *last_params)
+
+            #在验证集合上判断优略。如果更好则保存
+            metric.reset()
+            val_dataiter.reset()
+            for nbatch, data_batch in enumerate(val_dataiter):
+                mod.forward(data_batch)
+                mod.update_metric(metric, data_batch.label)
+
+            curr_acc = None
+            name_value = metric.get_name_value()
+            for name, value in name_value:
+                curr_acc = value
+                logging.info('Epoch[%d] Validation-%s=%f', i_epoch, name, value)
+            assert curr_acc is not None, 'cannot find Acc_exclude_padding in eval metric'
+
+            if i_epoch > 0 and lr.dynamic_lr > stop_factor_lr and curr_acc > last_acc:
+                logging.info('Epoch[%d] !!! Dev set performance drops, reverting this epoch',
+                             i_epoch)
+                logging.info('Epoch[%d] !!! LR decay: %g => %g', i_epoch,
+                             lr.dynamic_lr, lr.dynamic_lr / float(2.0))
+
+                lr.dynamic_lr /= 2.0
+                # we reset the optimizer because the internal states (e.g. momentum)
+                # might already be exploded, so we want to start from fresh
+                reset_optimizer()
+                mod.set_params(*last_params)
+            else:
+                last_params = mod.get_params()
+                last_acc = curr_acc
+                # save checkpoints
+                mx.model.save_checkpoint(self.output_type, i_epoch, mod.symbol, *last_params)
+
+            #last_params = mod.get_params()
+            #mx.model.save_checkpoint(self.output_type, i_epoch, mod.symbol, *last_params)
 
     def train(self, train_dataiter, val_dataiter):
         train_dataiter.reset()
