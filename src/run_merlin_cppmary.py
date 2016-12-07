@@ -490,6 +490,8 @@ def main_function(cfg):
 
     try:
         file_id_list = read_file_list(cfg.file_id_scp)
+        random.seed(281638)
+        random.shuffle(file_id_list)
         total_num = len(file_id_list)
         #random.seed(281638)
         #random.shuffle(file_id_list)
@@ -504,7 +506,6 @@ def main_function(cfg):
         raise
 
 
-    #random.shuffle(file_id_list)
 
     ###total file number including training, development, and testing
     total_file_number = len(file_id_list)
@@ -791,11 +792,9 @@ def main_function(cfg):
                 sequential_training = False
                 if cfg.AcousticModel:
                     output_type = 'acoustic'
-                    hidden_dim = 1024
-                    batch_size = 256
                 else:
                     output_type = 'duration'
-                    hidden_dim = 512
+                    hidden_dim = 256
                 n_ins = lab_dim
                 n_outs = cfg.cmp_dim
                 input_dim = n_ins

@@ -97,14 +97,15 @@ class MxnetTTs():
         weight_decay = 0.0005
         momentum = 0.9
         warmup_momentum = 0.3
+        devs = mx.gpu()
         #lr = mx.lr_scheduler.FactorScheduler(step=step, factor=.9, stop_factor_lr=stop_factor_lr)
         lr = SimpleLRScheduler(learning_rate, momentum=warmup_momentum)
         initializer = mx.init.Xavier(factor_type="in", magnitude=2.34)
 
-        mod = mx.mod.Module(self.network, label_names=('label',))
+        mod = mx.mod.Module(self.network, label_names=('label',), context=devs)
 
 
-        batch_end_callbacks = [mx.callback.Speedometer(self.batch_size, 64), ]
+        batch_end_callbacks = [mx.callback.Speedometer(self.batch_size, 256), ]
 
         mod.bind(data_shapes=train_dataiter.provide_data, label_shapes=train_dataiter.provide_label, for_training=True)
         mod.init_params(initializer=initializer)
@@ -115,10 +116,11 @@ class MxnetTTs():
                                optimizer_params={'lr_scheduler': lr,
                                                  'clip_gradient': clip_gradient,
                                                  'momentum': momentum,
-                                                 'rescale_grad': 1.0,
+                                                 'rescale_grad': 1.0},
                                                  # #0.015625 没有显示初始化，会导致rescale_grad被初始化为这个值，使得很难收敛；1/64
                                                  # 即1/batch_size
-                                                 'wd': weight_decay},
+                                                 #'wd': weight_decay},
+                                                 # 测试没有用wd的效果
                                force_init=True)
 
             # 使用这种方式初始化的optimiser，mse两三百！这种情况下需要设置rescale_grad为1/batch_size
@@ -188,7 +190,7 @@ class MxnetTTs():
                 last_params = mod.get_params()
                 last_acc = curr_acc
                 # save checkpoints
-                mx.model.save_checkpoint(self.output_type, i_epoch, mod.symbol, *last_params)
+                mx.model.save_checkpoint(self.output_type, 0, mod.symbol, *last_params)
 
             #last_params = mod.get_params()
             #mx.model.save_checkpoint(self.output_type, i_epoch, mod.symbol, *last_params)
