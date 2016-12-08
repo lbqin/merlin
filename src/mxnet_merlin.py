@@ -107,8 +107,15 @@ class MxnetTTs():
 
         batch_end_callbacks = [mx.callback.Speedometer(self.batch_size, 256), ]
 
+        use_pretrain = False
+
         mod.bind(data_shapes=train_dataiter.provide_data, label_shapes=train_dataiter.provide_label, for_training=True)
-        mod.init_params(initializer=initializer)
+        if use_pretrain:
+            logging.info('loading checkpoint')
+            sym, arg_params, aux_params = mx.model.load_checkpoint(self.output_type, 0)
+            mod.set_params(arg_params=arg_params, aux_params=aux_params)
+        else:
+            mod.init_params(initializer=initializer)
 
         def reset_optimizer():
             mod.init_optimizer(kvstore='device',
