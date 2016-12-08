@@ -859,6 +859,12 @@ def main_function(cfg):
         ### comment the below line if you don't want the files in a separate folder
         gen_dir = cfg.test_synth_dir
 
+    model_prefix='duration'
+    if cfg.AcousticModel:
+	model_prefix = 'acoustic'
+    else:
+	model_prefix = 'duration'
+
     if cfg.DNNGEN:
     	logger.info('generating from DNN')
 
@@ -876,11 +882,6 @@ def main_function(cfg):
         gen_file_list = prepare_file_path_list(gen_file_id_list, gen_dir, cfg.cmp_ext)
 
         if cfg.framework == 'mxnet':
-            model_prefix='duration'
-            if cfg.AcousticModel:
-                model_prefix = 'acoustic'
-            else:
-                model_prefix = 'duration'
             model_dnn = mx.model.FeedForward.load(model_prefix, 0)
             dnn_generation_mxnet(test_x_file_list, model_dnn, lab_dim, cfg.cmp_dim, gen_file_list)
         else:
@@ -930,6 +931,87 @@ def main_function(cfg):
     	logger.info('reconstructing waveform(s)')
     	generate_wav(gen_dir, gen_file_id_list, cfg)     # generated speech
 #    	generate_wav(nn_cmp_dir, gen_file_id_list, cfg)  # reference copy synthesis speech
+
+# load the mxnet dnn layer and merge the first and final layer into the dnn
+    merge_norm_dnn = True
+    if merge_norm_dnn and cfg.framework == 'mxnet':
+        sym, arg_params, aux_params = mx.model.load_checkpoint(model_prefix, 0)
+        first_layer_w = arg_params['fc1_weight'].asnumpy()
+        first_layer_b  = arg_params['fc1_bias'].asnumpy()
+
+        print first_layer_w.shape, first_layer_b.shape
+
+        io_fun = BinaryIOCollection()
+
+        lab_min_max, dims = io_fun.load_binary_file_frame(label_norm_file, lab_dim)
+        lab_min_vec = lab_min_max[0, :]
+        lab_max_vec = lab_min_max[1, :]
+        target_min = 0.01
+        target_max = 0.99
+
+        print lab_min_vec.shape, lab_max_vec.shape
+
+        lab_diff_vec = lab_max_vec - lab_min_vec
+
+        lab_diff_vec[lab_diff_vec==0] = 1.0
+
+        target_diff = target_max - target_min
+
+        factor_w = first_layer_w.copy()
+        b = first_layer_b.copy()
+
+        print 'orig w mean'
+        print np.mean(first_layer_w)
+
+        for i in xrange(lab_dim):
+            factor_w[:, i] = factor_w[:, i] / lab_diff_vec[i]
+
+        print np.mean(factor_w)
+
+        w = factor_w * target_diff
+
+        b = b + factor_w.dot(target_min * lab_diff_vec - lab_min_vec * target_diff)
+
+        print first_layer_b[1:10]
+        print b[1:10]
+        print np.mean(w)
+        print np.mean(factor_w)
+
+        first_layer_w = w.copy()
+        first_layer_b = b.copy()
+
+
+        print 'process the cmp file'
+        final_layer_w = arg_params['fc7_weight'].asnumpy()
+        final_layer_b  = arg_params['fc7_bias'].asnumpy()
+
+        cmp_mean_var, dims = io_fun.load_binary_file_frame(norm_info_file, cfg.cmp_dim)
+        cmp_mean = cmp_mean_var[0, :]
+        cmp_var = cmp_mean_var[1, :]
+        print cmp_mean.shape, cmp_var.shape
+
+        w = final_layer_w.copy()
+        b = final_layer_b.copy()
+
+        for i in xrange(cfg.cmp_dim):
+            w[i,:] = w[i,:] * cmp_var[i]
+
+        b = b * cmp_var + cmp_mean
+
+        #print final_layer_b
+        #print b
+        #print final_layer_w[:, 0]
+        #print cmp_var
+        #print w[:, 0]
+
+        final_layer_w = w.copy()
+        final_layer_b = b.copy()
+
+        arg_params['fc1_weight']  = mx.nd.array(first_layer_w)
+        arg_params['fc1_bias']  = mx.nd.array(first_layer_b)
+        arg_params['fc7_weight']  = mx.nd.array(final_layer_w)
+        arg_params['fc7_bias']  = mx.nd.array(final_layer_b)
+        mx.model.save_checkpoint(model_prefix, 100, sym, arg_params, aux_params)
 
 
 if __name__ == '__main__':
