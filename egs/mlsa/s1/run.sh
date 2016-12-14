@@ -25,13 +25,16 @@ echo "Step 2: training duration model..."
 
 ### Step 3: train acoustic model ###
 echo "Step 3: training acoustic model..."
-#./scripts/submit.sh ${MerlinDir}/src/run_merlin_cppmary.py conf/acoustic_${Voice}.conf
+./scripts/submit.sh ${MerlinDir}/src/run_merlin_cppmary.py conf/acoustic_${Voice}.conf
+
+exit
+
 
 
 ### Step 4: synthesize speech   ###
 echo "Step 4: synthesizing speech..."
-#./scripts/submit.sh ${MerlinDir}/src/run_merlin_cppmary.py conf/test_dur_synth_${Voice}.conf
-#./scripts/submit.sh ${MerlinDir}/src/run_merlin_cppmary.py conf/test_synth_${Voice}.conf
+./scripts/submit.sh ${MerlinDir}/src/run_merlin_cppmary.py conf/test_dur_synth_${Voice}.conf
+./scripts/submit.sh ${MerlinDir}/src/run_merlin_cppmary.py conf/test_synth_${Voice}.conf
 
 ### Step 5: delete intermediate synth files ###
 echo "Step 5: deleting intermediate synthesis files..."
