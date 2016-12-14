@@ -756,7 +756,13 @@ def main_function(cfg):
                       %(model_dir, cfg.combined_model_name, cfg.combined_feature_name, int(cfg.multistream_switch),
                         combined_model_arch, lab_dim, cfg.cmp_dim, cfg.train_file_number, cfg.hyper_params['learning_rate'])
 
-
+    model_prefix='duration'
+    hidden_dim = 256
+    n_epoch = 50
+    if cfg.AcousticModel:
+	model_prefix = 'acoustic'
+    else:
+	model_prefix = 'duration'
 
     ### DNN model training
     if cfg.TRAINDNN:
@@ -786,21 +792,13 @@ def main_function(cfg):
 
         try:
             if cfg.framework == 'mxnet':
-                hidden_dim = 512
-                output_type = 'duration'
                 batch_size = int(cfg.hyper_params['batch_size'])
                 sequential_training = False
-                if cfg.AcousticModel:
-                    output_type = 'acoustic'
-                else:
-                    output_type = 'duration'
-                    hidden_dim = 256
                 n_ins = lab_dim
                 n_outs = cfg.cmp_dim
                 input_dim = n_ins
                 output_dim = n_outs
-                n_epoch = 25
-                model_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, output_type)
+                model_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, model_prefix)
                 train_dataiter_all = TTSIter(x_file_list = train_x_file_list, y_file_list = train_y_file_list, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
                 val_dataiter_all = TTSIter(x_file_list = valid_x_file_list, y_file_list = valid_y_file_list, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
                 # model_dnn.train(train_dataiter, val_dataiter)
@@ -859,11 +857,6 @@ def main_function(cfg):
         ### comment the below line if you don't want the files in a separate folder
         gen_dir = cfg.test_synth_dir
 
-    model_prefix='duration'
-    if cfg.AcousticModel:
-	model_prefix = 'acoustic'
-    else:
-	model_prefix = 'duration'
 
     if cfg.DNNGEN:
     	logger.info('generating from DNN')
@@ -882,7 +875,9 @@ def main_function(cfg):
         gen_file_list = prepare_file_path_list(gen_file_id_list, gen_dir, cfg.cmp_ext)
 
         if cfg.framework == 'mxnet':
-            model_dnn = mx.model.FeedForward.load(model_prefix, 0)
+            prefix = '%s-%04d-%03d' % (model_prefix, hidden_dim, n_epoch)
+            print prefix
+            model_dnn = mx.model.FeedForward.load(prefix, 0)
             dnn_generation_mxnet(test_x_file_list, model_dnn, lab_dim, cfg.cmp_dim, gen_file_list)
         else:
             dnn_generation(test_x_file_list, nnets_file_name, lab_dim, cfg.cmp_dim, gen_file_list)
@@ -935,7 +930,8 @@ def main_function(cfg):
 # load the mxnet dnn layer and merge the first and final layer into the dnn
     merge_norm_dnn = True
     if merge_norm_dnn and cfg.framework == 'mxnet':
-        sym, arg_params, aux_params = mx.model.load_checkpoint(model_prefix, 0)
+        prefix = '%s-%04d-%03d' % (model_prefix, hidden_dim, n_epoch)
+        sym, arg_params, aux_params = mx.model.load_checkpoint(prefix, 0)
         first_layer_w = arg_params['fc1_weight'].asnumpy()
         first_layer_b  = arg_params['fc1_bias'].asnumpy()
 

@@ -92,9 +92,9 @@ class MxnetTTs():
         train_dataiter.reset()
         metric = mx.metric.create('mse')
         stop_factor_lr = 1e-6
-        learning_rate = 0.01 #学习率太大，也会导致mse爆掉（达到几百）！
+        learning_rate = 0.001 #学习率太大，也会导致mse爆掉（达到几百）！
         clip_gradient = 5.0
-        weight_decay = 0.0005
+        weight_decay = 0.0001
         momentum = 0.9
         warmup_momentum = 0.3
         devs = mx.gpu()
@@ -102,19 +102,22 @@ class MxnetTTs():
         lr = SimpleLRScheduler(learning_rate, momentum=warmup_momentum)
         initializer = mx.init.Xavier(factor_type="in", magnitude=2.34)
 
-        mod = mx.mod.Module(self.network, label_names=('label',), context=devs)
-
-
-        batch_end_callbacks = [mx.callback.Speedometer(self.batch_size, 256), ]
+        mod = None
+        batch_end_callbacks = [mx.callback.Speedometer(self.batch_size, 512), ]
 
         use_pretrain = False
+        prefix = '%s-%04d-%03d' % (self.output_type, self.hidden_dim, self.n_epoch)
 
-        mod.bind(data_shapes=train_dataiter.provide_data, label_shapes=train_dataiter.provide_label, for_training=True)
         if use_pretrain:
             logging.info('loading checkpoint')
-            sym, arg_params, aux_params = mx.model.load_checkpoint(self.output_type, 0)
+            sym, arg_params, aux_params = mx.model.load_checkpoint(prefix, 0)
+            prefix = prefix + '-finetune'
+            mod = mx.mod.Module(sym, label_names=('label',), context=devs)
+            mod.bind(data_shapes=train_dataiter.provide_data, label_shapes=train_dataiter.provide_label, for_training=True)
             mod.set_params(arg_params=arg_params, aux_params=aux_params)
         else:
+            mod = mx.mod.Module(self.network, label_names=('label',), context=devs)
+            mod.bind(data_shapes=train_dataiter.provide_data, label_shapes=train_dataiter.provide_label, for_training=True)
             mod.init_params(initializer=initializer)
 
         def reset_optimizer():
@@ -197,7 +200,7 @@ class MxnetTTs():
                 last_params = mod.get_params()
                 last_acc = curr_acc
                 # save checkpoints
-                mx.model.save_checkpoint(self.output_type, 0, mod.symbol, *last_params)
+                mx.model.save_checkpoint(prefix , 0, mod.symbol, *last_params)
 
             #last_params = mod.get_params()
             #mx.model.save_checkpoint(self.output_type, i_epoch, mod.symbol, *last_params)
@@ -260,7 +263,7 @@ class TTSIter(mx.io.DataIter):
         self.n_ins = n_ins
         self.n_outs = n_outs
         self.batch_size = batch_size
-        self.buffer_size = 256
+        self.buffer_size = 8192
         self.sequential = sequential
         self.output_type = output_type
         self.buffer_size = int(self.buffer_size / self.batch_size) * batch_size
