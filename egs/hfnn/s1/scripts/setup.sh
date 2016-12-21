@@ -22,13 +22,7 @@ mkdir -p ${acoustic_dir}
 mkdir -p ${duration_dir}
 mkdir -p ${synthesis_dir}
 
-if [ "$voice_name" == "hfnn" ]
-then
-    data_dir=hfnn_data
-else
-    echo "The data for voice name ($voice_name) is not available...please use hfnn!!"
-    exit 1
-fi
+data_dir=${voice_name}_data
 
 if [[ ! -d ${acoustic_dir}/data ]]; then
     # extract the feature
@@ -36,7 +30,6 @@ if [[ ! -d ${acoustic_dir}/data ]]; then
     cp -r ${data_dir}/data/* ${acoustic_dir}/data
     cp -r ${data_dir}/data ${duration_dir}/data
     cp -r ${data_dir}/test_data/* ${synthesis_dir}/
-    # prepare the alignment file
 fi
 echo "data is ready!"
 
@@ -49,17 +42,8 @@ echo "Voice=${voice_name}" >> $global_config_file
 echo "Labels=state_align" >> $global_config_file
 echo "Vocoder=WORLD" >> $global_config_file
 echo "SamplingFreq=48000" >> $global_config_file
-
-if [ "$voice_name" == "hfnn" ]
-then
-    echo "FileIDList=basename.scp" >> $global_config_file
-    echo "Train=1800" >> $global_config_file 
-    echo "Valid=230" >> $global_config_file 
-    echo "Test=15" >> $global_config_file 
-else
-    echo "The data for voice name ($voice_name) is not available...please use hfnn !!"
-    exit 1
-fi
+echo "FileIDList=basename.scp" >> $global_config_file
+echo 'framework=mxnet' >> $global_config_file
 
 echo "Merlin default voice settings configured in $global_config_file"
 echo "setup done...!"
