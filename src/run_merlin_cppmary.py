@@ -825,6 +825,7 @@ def main_function(cfg):
     total_file_number = len(file_id_list)
 
     data_dir = cfg.data_dir
+    data_dir = os.path.join(cfg.work_dir, 'gen_data')
 
     nn_cmp_dir       = os.path.join(data_dir, 'nn' + cfg.combined_feature_name + '_' + str(cfg.cmp_dim))
     nn_cmp_norm_dir   = os.path.join(data_dir, 'nn_norm'  + cfg.combined_feature_name + '_' + str(cfg.cmp_dim))
@@ -844,14 +845,12 @@ def main_function(cfg):
 
     lab_dim = cfg.lab_dim
     suffix = str(lab_dim)
-    #suffix = "cppmary"
 
     if cfg.process_labels_in_work_dir:
         label_data_dir = cfg.work_dir
     else:
         label_data_dir = data_dir
 
-    # the number can be removed
     binary_label_dir      = os.path.join(label_data_dir, 'binary_label_'+suffix)
     nn_label_dir          = os.path.join(label_data_dir, 'nn_no_silence_lab_'+suffix)
     nn_label_norm_dir     = os.path.join(label_data_dir, 'nn_no_silence_lab_norm_'+suffix)
@@ -861,8 +860,6 @@ def main_function(cfg):
     nn_label_norm_file_list  = prepare_file_path_list(file_id_list, nn_label_norm_dir, cfg.lab_ext)
     dur_file_list            = prepare_file_path_list(file_id_list, cfg.in_dur_dir, cfg.dur_ext)
     lf0_file_list            = prepare_file_path_list(file_id_list, cfg.in_lf0_dir, cfg.lf0_ext)
-
-    # to do - sanity check the label dimension here?
 
     min_max_normaliser = None
     label_norm_file = 'label_norm_%s_%d.dat' %(cfg.label_style, lab_dim)

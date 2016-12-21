@@ -22,13 +22,11 @@ mkdir -p ${acoustic_dir}
 mkdir -p ${duration_dir}
 mkdir -p ${synthesis_dir}
 
-data_dir=${voice_name}_data
+data_dir=${current_working_dir}/${voice_name}_data
 
 if [[ ! -d ${acoustic_dir}/data ]]; then
-    # extract the feature
-    cp -r ${data_dir}/acoustic_data ${acoustic_dir}/data
-    cp -r ${data_dir}/data/* ${acoustic_dir}/data
-    cp -r ${data_dir}/data ${duration_dir}/data
+    ln -s ${data_dir}/data ${acoustic_dir}/data
+    ln -s ${data_dir}/data ${duration_dir}/data
     cp -r ${data_dir}/test_data/* ${synthesis_dir}/
 fi
 echo "data is ready!"
