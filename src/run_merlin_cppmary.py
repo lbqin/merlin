@@ -466,35 +466,350 @@ def make_equal(in_file_list, ref_file_list, in_feature_dim, ref_feature_dim):
             print in_frame_number, ref_file_name
             io_funcs.array_to_binary_file(target_features, ref_file_name)
 
+def do_norm_lab(cfg, in_label_align_file_list, nn_label_file_list, label_norm_file, nn_label_norm_file_list, dur_file_list):
+    logger.info('preparing label data (input) using cppmary style labels')
+    label_cppmary = LabelCppmary()
+    if cfg.add_frame_features:
+        label_cppmary.prepare_acoustic_label_feature(in_label_align_file_list, nn_label_file_list)
+    else:
+        label_cppmary.prepare_label_feature(in_label_align_file_list, nn_label_file_list)
 
+    assert (cfg.lab_dim == label_cppmary.label_dimension)
+
+    min_max_normaliser = MinMaxNormalisation(feature_dimension=cfg.lab_dim, min_value=0.01, max_value=0.99)
+    ###use only training data to find min-max information, then apply on the whole dataset
+    if cfg.GenTestList:
+        min_max_normaliser.load_min_max_values(label_norm_file)
+    else:
+        min_max_normaliser.find_min_max_values(nn_label_file_list[0:cfg.train_file_number])
+    ### enforce silence such that the normalization runs without removing silence: only for final synthesis
+    # if cfg.GenTestList and cfg.enforce_silence:
+    #     min_max_normaliser.normalise_data(binary_label_file_list, nn_label_norm_file_list)
+    # else:
+    min_max_normaliser.normalise_data(nn_label_file_list, nn_label_norm_file_list)
+
+    if min_max_normaliser != None and not cfg.GenTestList:
+        ### save label normalisation information for unseen testing labels
+        label_min_vector = min_max_normaliser.min_vector
+        label_max_vector = min_max_normaliser.max_vector
+        label_norm_info = numpy.concatenate((label_min_vector, label_max_vector), axis=0)
+
+        label_norm_info = numpy.array(label_norm_info, 'float32')
+        fid = open(label_norm_file, 'wb')
+        label_norm_info.tofile(fid)
+        fid.close()
+        logger.info('saved %s vectors to %s' % (label_min_vector.size, label_norm_file))
+
+
+
+def make_cmp(delta_win, acc_win, in_file_list_dict, nn_cmp_file_list, dur_file_list, lf0_file_list):
+    logger.info('creating acoustic (output) features')
+    acoustic_worker = AcousticComposition(delta_win=delta_win, acc_win=acc_win)
+    if 'dur' in cfg.in_dir_dict.keys() and cfg.AcousticModel:
+        acoustic_worker.make_equal_frames(dur_file_list, lf0_file_list, cfg.in_dimension_dict)
+    acoustic_worker.prepare_nn_data(in_file_list_dict, nn_cmp_file_list, cfg.in_dimension_dict, cfg.out_dimension_dict)
+
+def norm_cmp(cfg, nn_cmp_file_list, nn_cmp_norm_file_list, norm_info_file, var_dir, var_file_dict):
+    logger.info('normalising acoustic (output) features using method %s' % cfg.output_feature_normalisation)
+    cmp_norm_info = None
+    if cfg.output_feature_normalisation == 'MVN':
+        normaliser = MeanVarianceNorm(feature_dimension=cfg.cmp_dim)
+        normaliser.compute_global_variance(nn_cmp_file_list[0:cfg.train_file_number], cfg.cmp_dim, var_dir)
+        ###calculate mean and std vectors on the training data, and apply on the whole dataset
+        global_mean_vector = normaliser.compute_mean(nn_cmp_file_list[0:cfg.train_file_number], 0, cfg.cmp_dim)
+        global_std_vector = normaliser.compute_std(nn_cmp_file_list[0:cfg.train_file_number], global_mean_vector, 0,
+                                                   cfg.cmp_dim)
+
+        normaliser.feature_normalisation(nn_cmp_file_list, nn_cmp_norm_file_list)
+        cmp_norm_info = numpy.concatenate((global_mean_vector, global_std_vector), axis=0)
+
+    elif cfg.output_feature_normalisation == 'MINMAX':
+        min_max_normaliser = MinMaxNormalisation(feature_dimension=cfg.cmp_dim)
+        global_mean_vector = min_max_normaliser.compute_mean(nn_cmp_file_list[0:cfg.train_file_number])
+        global_std_vector = min_max_normaliser.compute_std(nn_cmp_file_list[0:cfg.train_file_number],
+                                                           global_mean_vector)
+
+        min_max_normaliser = MinMaxNormalisation(feature_dimension=cfg.cmp_dim, min_value=0.01, max_value=0.99)
+        min_max_normaliser.find_min_max_values(nn_cmp_file_list[0:cfg.train_file_number])
+        min_max_normaliser.normalise_data(nn_cmp_file_list, nn_cmp_norm_file_list)
+
+        cmp_min_vector = min_max_normaliser.min_vector
+        cmp_max_vector = min_max_normaliser.max_vector
+        cmp_norm_info = numpy.concatenate((cmp_min_vector, cmp_max_vector), axis=0)
+
+    else:
+        logger.critical('Normalisation type %s is not supported!\n' % (cfg.output_feature_normalisation))
+        raise
+
+    cmp_norm_info = numpy.array(cmp_norm_info, 'float32')
+    fid = open(norm_info_file, 'wb')
+    cmp_norm_info.tofile(fid)
+    fid.close()
+    logger.info('saved %s vectors to %s' % (cfg.output_feature_normalisation, norm_info_file))
+
+    feature_index = 0
+    for feature_name in cfg.out_dimension_dict.keys():
+        feature_std_vector = numpy.array(
+            global_std_vector[:, feature_index:feature_index + cfg.out_dimension_dict[feature_name]], 'float32')
+
+        fid = open(var_file_dict[feature_name], 'w')
+        feature_var_vector = feature_std_vector ** 2
+        feature_var_vector.tofile(fid)
+        fid.close()
+
+        logger.info('saved %s variance vector to %s' % (feature_name, var_file_dict[feature_name]))
+
+        feature_index += cfg.out_dimension_dict[feature_name]
+    total_var_file = os.path.join(var_dir, 'total_var')
+    fid = open(total_var_file, 'w')
+    total_var = numpy.array(global_std_vector[:, :], 'float32')
+    total_var = total_var ** 2
+    total_var.tofile(fid)
+    logger.info('saved total variance vector to %s' % (total_var_file))
+    fid.close()
+
+def merge_dnn(prefix, label_norm_file, lab_dim, norm_info_file):
+    sym, arg_params, aux_params = mx.model.load_checkpoint(prefix, 0)
+    first_layer_w = arg_params['fc1_weight'].asnumpy()
+    first_layer_b = arg_params['fc1_bias'].asnumpy()
+
+    print first_layer_w.shape, first_layer_b.shape
+
+    io_fun = BinaryIOCollection()
+
+    lab_min_max, dims = io_fun.load_binary_file_frame(label_norm_file, lab_dim)
+    lab_min_vec = lab_min_max[0, :]
+    lab_max_vec = lab_min_max[1, :]
+    target_min = 0.01
+    target_max = 0.99
+
+    print lab_min_vec.shape, lab_max_vec.shape
+
+    lab_diff_vec = lab_max_vec - lab_min_vec
+
+    lab_diff_vec[lab_diff_vec == 0] = 1.0
+
+    target_diff = target_max - target_min
+
+    factor_w = first_layer_w.copy()
+    b = first_layer_b.copy()
+
+    print 'orig w mean'
+    print np.mean(first_layer_w)
+
+    for i in xrange(lab_dim):
+        factor_w[:, i] = factor_w[:, i] / lab_diff_vec[i]
+
+    print np.mean(factor_w)
+
+    w = factor_w * target_diff
+
+    b = b + factor_w.dot(target_min * lab_diff_vec - lab_min_vec * target_diff)
+
+    print first_layer_b[1:10]
+    print b[1:10]
+    print np.mean(w)
+    print np.mean(factor_w)
+
+    first_layer_w = w.copy()
+    first_layer_b = b.copy()
+
+    print 'process the cmp file'
+    final_layer_w = arg_params['fc7_weight'].asnumpy()
+    final_layer_b = arg_params['fc7_bias'].asnumpy()
+
+    cmp_mean_var, dims = io_fun.load_binary_file_frame(norm_info_file, cfg.cmp_dim)
+    cmp_mean = cmp_mean_var[0, :]
+    cmp_var = cmp_mean_var[1, :]
+    print cmp_mean.shape, cmp_var.shape
+
+    w = final_layer_w.copy()
+    b = final_layer_b.copy()
+
+    for i in xrange(cfg.cmp_dim):
+        w[i, :] = w[i, :] * cmp_var[i]
+
+    b = b * cmp_var + cmp_mean
+
+    # print final_layer_b
+    # print b
+    # print final_layer_w[:, 0]
+    # print cmp_var
+    # print w[:, 0]
+
+    final_layer_w = w.copy()
+    final_layer_b = b.copy()
+
+    arg_params['fc1_weight'] = mx.nd.array(first_layer_w)
+    arg_params['fc1_bias'] = mx.nd.array(first_layer_b)
+    arg_params['fc7_weight'] = mx.nd.array(final_layer_w)
+    arg_params['fc7_bias'] = mx.nd.array(final_layer_b)
+    mx.model.save_checkpoint(prefix, 100, sym, arg_params, aux_params)
+
+def do_train(cfg, var_file_dict, norm_info_file, model_dir, nnets_file_name, train_x_file_list, train_y_file_list, valid_x_file_list, valid_y_file_list):
+    hidden_dim = cfg.hidden_dim
+    n_epoch = cfg.training_epochs
+    model_prefix = cfg.model_prefix
+    var_dict = load_covariance(var_file_dict, cfg.out_dimension_dict)
+    logger.info('training DNN')
+    fid = open(norm_info_file, 'rb')
+    cmp_min_max = numpy.fromfile(fid, dtype=numpy.float32)
+    fid.close()
+    cmp_min_max = cmp_min_max.reshape((2, -1))
+    cmp_mean_vector = cmp_min_max[0,]
+    cmp_std_vector = cmp_min_max[1,]
+
+    try:
+        os.makedirs(model_dir)
+    except OSError as e:
+        if e.errno == errno.EEXIST:
+            # not an error - just means directory already exists
+            pass
+        else:
+            logger.critical('Failed to create model directory %s' % model_dir)
+            logger.critical(' OS error was: %s' % e.strerror)
+            raise
+
+    try:
+        if cfg.framework == 'mxnet':
+            batch_size = int(cfg.hyper_params['batch_size'])
+            sequential_training = False
+            n_ins = cfg.lab_dim
+            n_outs = cfg.cmp_dim
+            input_dim = n_ins
+            output_dim = n_outs
+            model_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, model_prefix)
+            train_dataiter_all = TTSIter(x_file_list=train_x_file_list, y_file_list=train_y_file_list, n_ins=n_ins,
+                                         n_outs=n_outs, batch_size=batch_size, sequential=sequential_training, shuffle=True)
+            val_dataiter_all = TTSIter(x_file_list=valid_x_file_list, y_file_list=valid_y_file_list, n_ins=n_ins,
+                                       n_outs=n_outs, batch_size=batch_size, sequential=sequential_training, shuffle=False)
+            # model_dnn.train(train_dataiter, val_dataiter)
+
+            # train_x_file_list1 = train_x_file_list[0:len(train_x_file_list)/2]
+            # train_x_file_list2 = train_x_file_list[len(train_x_file_list)/2:]
+            # train_y_file_list1 = train_y_file_list[0:len(train_y_file_list)/2]
+            # train_y_file_list2 = train_y_file_list[len(train_y_file_list)/2:]
+            # valid_x_file_list1 = valid_x_file_list[0:len(valid_x_file_list)/2]
+            # valid_x_file_list2 = valid_x_file_list[len(valid_x_file_list)/2:]
+            # valid_y_file_list1 = valid_y_file_list[0:len(valid_y_file_list)/2]
+            # valid_y_file_list2 = valid_y_file_list[len(valid_y_file_list)/2:]
+            # train_dataiter1 = TTSIter(x_file_list = train_x_file_list1, y_file_list = train_y_file_list1, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
+            # train_dataiter2 = TTSIter(x_file_list = train_x_file_list2, y_file_list = train_y_file_list2, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
+            # val_dataiter1 = TTSIter(x_file_list = valid_x_file_list1, y_file_list = valid_y_file_list1, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
+            # val_dataiter2 = TTSIter(x_file_list = valid_x_file_list2, y_file_list = valid_y_file_list2, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
+
+            # train_dataiter = mx.io.PrefetchingIter([train_dataiter1, train_dataiter2], rename_data=[{'data': 'data1'}, {'data': 'data2'}])
+            # val_dataiter = mx.io.PrefetchingIter([val_dataiter1, val_dataiter2], rename_data=[{'data': 'data1'}, {'data': 'data2'}])
+            # train_dataiter = mx.io.PrefetchingIter([train_dataiter1, train_dataiter2], rename_data = [{'data': 'data1'}, {'data': 'data2'}], rename_label = [{'label': 'label1'}, {'label': 'label2'}])
+            # val_dataiter = mx.io.PrefetchingIter([val_dataiter1, val_dataiter2], rename_data = [{'data': 'data1'}, {'data': 'data2'}], rename_label = [{'label': 'label1'}, {'label': 'label2'}])
+            # train_dataiter = mx.io.PrefetchingIter([train_dataiter1, train_dataiter2])
+            # val_dataiter = mx.io.PrefetchingIter([val_dataiter1, val_dataiter2])
+            train_dataiter = mx.io.PrefetchingIter(train_dataiter_all)
+            val_dataiter = mx.io.PrefetchingIter(val_dataiter_all)
+            # model_dnn.train(train_dataiter, val_dataiter)
+            model_dnn.train_module(train_dataiter, val_dataiter)
+            print "model train ok"
+
+        else:
+            train_DNN(train_xy_file_list=(train_x_file_list, train_y_file_list), \
+                      valid_xy_file_list=(valid_x_file_list, valid_y_file_list), \
+                      nnets_file_name=nnets_file_name, \
+                      n_ins=cfg.lab_dim, n_outs=cfg.cmp_dim, ms_outs=cfg.multistream_outs, \
+                      hyper_params=cfg.hyper_params, buffer_size=cfg.buffer_size, plot=cfg.plot, var_dict=var_dict,
+                      cmp_mean_vector=cmp_mean_vector, cmp_std_vector=cmp_std_vector)
+    except KeyboardInterrupt:
+        logger.critical('train_DNN interrupted via keyboard')
+        # Could 'raise' the exception further, but that causes a deep traceback to be printed
+        # which we don't care about for a keyboard interrupt. So, just bail out immediately
+        sys.exit(1)
+    except:
+        logger.critical('train_DNN threw an exception')
+        raise
+
+
+def do_generate(cfg, gen_dir, gen_file_id_list, test_x_file_list, nnets_file_name, norm_info_file, var_file_dict):
+    logger.info('generating from DNN')
+    try:
+        os.makedirs(gen_dir)
+    except OSError as e:
+        if e.errno == errno.EEXIST:
+            # not an error - just means directory already exists
+            pass
+        else:
+            logger.critical('Failed to create generation directory %s' % gen_dir)
+            logger.critical(' OS error was: %s' % e.strerror)
+            raise
+
+    gen_file_list = prepare_file_path_list(gen_file_id_list, gen_dir, cfg.cmp_ext)
+
+    if cfg.framework == 'mxnet':
+        prefix = '%s-%04d-%03d' % (cfg.model_prefix, cfg.hidden_dim, cfg.training_epochs)
+        print prefix
+        model_dnn = mx.model.FeedForward.load(prefix, 0)
+        dnn_generation_mxnet(test_x_file_list, model_dnn, cfg.lab_dim, cfg.cmp_dim, gen_file_list)
+    else:
+        dnn_generation(test_x_file_list, nnets_file_name, cfg.lab_dim, cfg.cmp_dim, gen_file_list)
+
+        logger.debug('denormalising generated output using method %s' % cfg.output_feature_normalisation)
+
+    fid = open(norm_info_file, 'rb')
+    cmp_min_max = numpy.fromfile(fid, dtype=numpy.float32)
+    fid.close()
+    cmp_min_max = cmp_min_max.reshape((2, -1))
+    cmp_min_vector = cmp_min_max[0,]
+    cmp_max_vector = cmp_min_max[1,]
+
+    if cfg.output_feature_normalisation == 'MVN':
+        denormaliser = MeanVarianceNorm(feature_dimension=cfg.cmp_dim)
+        denormaliser.feature_denormalisation(gen_file_list, gen_file_list, cmp_min_vector, cmp_max_vector)
+
+    elif cfg.output_feature_normalisation == 'MINMAX':
+        denormaliser = MinMaxNormalisation(cfg.cmp_dim, min_value=0.01, max_value=0.99, min_vector=cmp_min_vector,
+                                           max_vector=cmp_max_vector)
+        denormaliser.denormalise_data(gen_file_list, gen_file_list)
+    else:
+        logger.critical('denormalising method %s is not supported!\n' % (cfg.output_feature_normalisation))
+        raise
+
+    if cfg.AcousticModel:
+        ##perform MLPG to smooth parameter trajectory
+        ## lf0 is included, the output features much have vuv.
+        generator = ParameterGeneration(gen_wav_features=cfg.gen_wav_features, enforce_silence=cfg.enforce_silence)
+        generator.acoustic_decomposition(gen_file_list, cfg.cmp_dim, cfg.out_dimension_dict, cfg.file_extension_dict,
+                                         var_file_dict, do_MLPG=cfg.do_MLPG, cfg=cfg)
+
+    if cfg.DurationModel:
+        ### Perform duration normalization(min. state dur set to 1) ###
+        gen_dur_list = prepare_file_path_list(gen_file_id_list, gen_dir, cfg.dur_ext)
+        gen_label_list = prepare_file_path_list(gen_file_id_list, gen_dir, cfg.lab_ext)
+        in_gen_label_align_file_list = prepare_file_path_list(gen_file_id_list, cfg.in_label_align_dir, cfg.lab_ext,
+                                                              False)
+
+        generator = ParameterGeneration(gen_wav_features=cfg.gen_wav_features)
+        generator.duration_decomposition(gen_file_list, cfg.cmp_dim, cfg.out_dimension_dict, cfg.file_extension_dict)
+
+        label_cppmary1 = LabelCppmary()
+        label_cppmary1.prepare_predict_label(in_gen_label_align_file_list, gen_label_list, gen_dur_list)
+
+    ### generate wav
+    if cfg.GENWAV:
+        logger.info('reconstructing waveform(s)')
+        generate_wav(gen_dir, gen_file_id_list, cfg)  # generated speech
 
 def main_function(cfg):
 
-
-    # get a logger for this main function
     logger = logging.getLogger("main")
-
-    # get another logger to handle plotting duties
     plotlogger = logging.getLogger("plotting")
-
-    # later, we might do this via a handler that is created, attached and configured
-    # using the standard config mechanism of the logging module
-    # but for now we need to do it manually
     plotlogger.set_plot_path(cfg.plot_dir)
-
-    #### parameter setting########
     hidden_layer_size = cfg.hyper_params['hidden_layer_size']
 
 
     ####prepare environment
-
     try:
         file_id_list = read_file_list(cfg.file_id_scp)
         random.seed(281638)
         random.shuffle(file_id_list)
         total_num = len(file_id_list)
-        #random.seed(281638)
-        #random.shuffle(file_id_list)
         if cfg.train_file_number < 0 :
             cfg.train_file_number = int(total_num * 0.9)
             cfg.valid_file_number = int(total_num * 0.1)
@@ -504,7 +819,6 @@ def main_function(cfg):
         # this means that open(...) threw an error
         logger.critical('Could not load file id list from %s' % cfg.file_id_scp)
         raise
-
 
 
     ###total file number including training, development, and testing
@@ -526,24 +840,11 @@ def main_function(cfg):
     nn_cmp_file_list         = prepare_file_path_list(file_id_list, nn_cmp_dir, cfg.cmp_ext)
     nn_cmp_norm_file_list    = prepare_file_path_list(file_id_list, nn_cmp_norm_dir, cfg.cmp_ext)
 
-    ###normalisation information
     norm_info_file = os.path.join(data_dir, 'norm_info' + cfg.combined_feature_name + '_' + str(cfg.cmp_dim) + '_' + cfg.output_feature_normalisation + '.dat')
 
-    ### normalise input full context label
-    # currently supporting two different forms of lingustic features
-    # later, we should generalise this
-
-    if cfg.label_style == 'cppmary':
-        suffix = 'cppmary'
-        lab_dim = 546
-        if cfg.AcousticModel:
-            lab_dim = 555
-        elif cfg.DurationModel:
-            lab_dim = 546
-        else:
-            raise
-    else:
-        raise
+    lab_dim = cfg.lab_dim
+    suffix = str(lab_dim)
+    #suffix = "cppmary"
 
     if cfg.process_labels_in_work_dir:
         label_data_dir = cfg.work_dir
@@ -591,119 +892,27 @@ def main_function(cfg):
 
 
     if cfg.NORMLAB and (cfg.label_style == 'cppmary'):
-        # simple HTS labels
-        logger.info('preparing label data (input) using cppmary style labels')
-        label_cppmary = LabelCppmary()
-        if cfg.add_frame_features :
-            label_cppmary.prepare_acoustic_label_feature(in_label_align_file_list, nn_label_file_list)
-        else:
-            label_cppmary.prepare_label_feature(in_label_align_file_list, nn_label_file_list)
-
-        lab_dim = label_cppmary.label_dimension
-
-        min_max_normaliser = MinMaxNormalisation(feature_dimension = lab_dim, min_value = 0.01, max_value = 0.99)
-        ###use only training data to find min-max information, then apply on the whole dataset
-        if cfg.GenTestList:
-            min_max_normaliser.load_min_max_values(label_norm_file)
-        else:
-            min_max_normaliser.find_min_max_values(nn_label_file_list[0:cfg.train_file_number])
-        ### enforce silence such that the normalization runs without removing silence: only for final synthesis
-        # if cfg.GenTestList and cfg.enforce_silence:
-        #     min_max_normaliser.normalise_data(binary_label_file_list, nn_label_norm_file_list)
-        # else:
-        min_max_normaliser.normalise_data(nn_label_file_list, nn_label_norm_file_list)
-
-    if min_max_normaliser != None and not cfg.GenTestList:
-        ### save label normalisation information for unseen testing labels
-        label_min_vector = min_max_normaliser.min_vector
-        label_max_vector = min_max_normaliser.max_vector
-        label_norm_info = numpy.concatenate((label_min_vector, label_max_vector), axis=0)
-
-        label_norm_info = numpy.array(label_norm_info, 'float32')
-        fid = open(label_norm_file, 'wb')
-        label_norm_info.tofile(fid)
-        fid.close()
-        logger.info('saved %s vectors to %s' %(label_min_vector.size, label_norm_file))
-
+        do_norm_lab(cfg, in_label_align_file_list, nn_label_file_list, label_norm_file, nn_label_norm_file_list, dur_file_list)
 
     ### make output duration data
     if cfg.MAKEDUR:
         if cfg.label_style == 'cppmary':
             logger.info('creating cppmary duration (output) features')
+            label_cppmary = LabelCppmary()
             label_cppmary.prepare_dur_feature(in_label_align_file_list, dur_file_list)
         else:
             logger.info('creating duration (output) features')
             raise
 
-
     ### make output acoustic data
     if cfg.MAKECMP: #如果有多个数据流则合并，并计算delta，delta-delta
-        logger.info('creating acoustic (output) features')
-        delta_win = cfg.delta_win #[-0.5, 0.0, 0.5]
-        acc_win = cfg.acc_win     #[1.0, -2.0, 1.0]
-
-        acoustic_worker = AcousticComposition(delta_win = delta_win, acc_win = acc_win)
-        if 'dur' in cfg.in_dir_dict.keys() and cfg.AcousticModel:
-            acoustic_worker.make_equal_frames(dur_file_list, lf0_file_list, cfg.in_dimension_dict)
-        acoustic_worker.prepare_nn_data(in_file_list_dict, nn_cmp_file_list, cfg.in_dimension_dict, cfg.out_dimension_dict)
+        make_cmp(cfg.delta_win, cfg.acc_win, in_file_list_dict, nn_cmp_file_list, dur_file_list, lf0_file_list)
 
 
     ### normalise output acoustic data
     if cfg.NORMCMP:
-        logger.info('normalising acoustic (output) features using method %s' % cfg.output_feature_normalisation)
-        cmp_norm_info = None
-        if cfg.output_feature_normalisation == 'MVN':
-            normaliser = MeanVarianceNorm(feature_dimension=cfg.cmp_dim)
-            normaliser.compute_global_variance(nn_cmp_file_list[0:cfg.train_file_number], cfg.cmp_dim, var_dir)
-            ###calculate mean and std vectors on the training data, and apply on the whole dataset
-            global_mean_vector = normaliser.compute_mean(nn_cmp_file_list[0:cfg.train_file_number], 0, cfg.cmp_dim)
-            global_std_vector = normaliser.compute_std(nn_cmp_file_list[0:cfg.train_file_number], global_mean_vector, 0, cfg.cmp_dim)
+        norm_cmp(cfg, nn_cmp_file_list, nn_cmp_norm_file_list, norm_info_file, var_dir, var_file_dict)
 
-            normaliser.feature_normalisation(nn_cmp_file_list, nn_cmp_norm_file_list)
-            cmp_norm_info = numpy.concatenate((global_mean_vector, global_std_vector), axis=0)
-
-        elif cfg.output_feature_normalisation == 'MINMAX':
-            min_max_normaliser = MinMaxNormalisation(feature_dimension = cfg.cmp_dim)
-            global_mean_vector = min_max_normaliser.compute_mean(nn_cmp_file_list[0:cfg.train_file_number])
-            global_std_vector = min_max_normaliser.compute_std(nn_cmp_file_list[0:cfg.train_file_number], global_mean_vector)
-
-            min_max_normaliser = MinMaxNormalisation(feature_dimension = cfg.cmp_dim, min_value = 0.01, max_value = 0.99)
-            min_max_normaliser.find_min_max_values(nn_cmp_file_list[0:cfg.train_file_number])
-            min_max_normaliser.normalise_data(nn_cmp_file_list, nn_cmp_norm_file_list)
-
-            cmp_min_vector = min_max_normaliser.min_vector
-            cmp_max_vector = min_max_normaliser.max_vector
-            cmp_norm_info = numpy.concatenate((cmp_min_vector, cmp_max_vector), axis=0)
-
-        else:
-            logger.critical('Normalisation type %s is not supported!\n' %(cfg.output_feature_normalisation))
-            raise
-
-        cmp_norm_info = numpy.array(cmp_norm_info, 'float32')
-        fid = open(norm_info_file, 'wb')
-        cmp_norm_info.tofile(fid)
-        fid.close()
-        logger.info('saved %s vectors to %s' %(cfg.output_feature_normalisation, norm_info_file))
-
-        feature_index = 0
-        for feature_name in cfg.out_dimension_dict.keys():
-            feature_std_vector = numpy.array(global_std_vector[:,feature_index:feature_index+cfg.out_dimension_dict[feature_name]], 'float32')
-
-            fid = open(var_file_dict[feature_name], 'w')
-            feature_var_vector = feature_std_vector**2
-            feature_var_vector.tofile(fid)
-            fid.close()
-
-            logger.info('saved %s variance vector to %s' %(feature_name, var_file_dict[feature_name]))
-
-            feature_index += cfg.out_dimension_dict[feature_name]
-        total_var_file = os.path.join(var_dir, 'total_var')
-        fid = open(total_var_file, 'w')
-        total_var = numpy.array(global_std_vector[:,:], 'float32')
-        total_var = total_var**2
-        total_var.tofile(fid)
-        logger.info('saved total variance vector to %s' %(total_var_file))
-        fid.close()
 
     train_x_file_list = nn_label_norm_file_list[0:cfg.train_file_number]
     train_y_file_list = nn_cmp_norm_file_list[0:cfg.train_file_number]
@@ -711,40 +920,6 @@ def main_function(cfg):
     valid_y_file_list = nn_cmp_norm_file_list[cfg.train_file_number:cfg.train_file_number+cfg.valid_file_number]
     gen_file_id_list = file_id_list[cfg.train_file_number+cfg.valid_file_number:cfg.train_file_number+cfg.valid_file_number+cfg.test_file_number]
     test_x_file_list  = nn_label_norm_file_list[cfg.train_file_number+cfg.valid_file_number:cfg.train_file_number+cfg.valid_file_number+cfg.test_file_number]
-
-    #make_equal(nn_label_norm_file_list, nn_cmp_norm_file_list, 555, 124)
-    # total_index = range(len(nn_label_norm_file_list))
-    # test_portion = 0.1
-    # valid_portion = 0.1
-    # test_index = sorted(random.sample(total_index, int(test_portion * len(nn_label_norm_file_list))))
-    # train_vilid_index = list(set(total_index) ^ set(test_index))
-    # valid_index = sorted(random.sample(train_vilid_index, int(valid_portion * len(nn_label_norm_file_list))))
-    # train_index = list(set(train_vilid_index) ^ set(valid_index))
-    #
-    # train_x_file_list = [nn_label_norm_file_list[index] for index in train_index]
-    # train_y_file_list = [nn_cmp_norm_file_list[index] for index in train_index]
-    # valid_x_file_list = [nn_label_norm_file_list[index] for index in valid_index]
-    # valid_y_file_list = [nn_cmp_norm_file_list[index] for index in valid_index]
-    # gen_file_id_list = [file_id_list[index] for index in test_index]
-    # test_x_file_list = [nn_label_norm_file_list[index] for index in test_index]
-
-
-    # we need to know the label dimension before training the DNN
-    # computing that requires us to look at the labels
-    #
-    # currently, there are two ways to do this
-    if cfg.label_style == 'cppmary':
-        if cfg.NORMLAB:
-            lab_dim = label_cppmary.label_dimension
-        else:
-            if cfg.AcousticModel:
-                lab_dim = 555
-            elif cfg.DurationModel:
-                lab_dim = 546
-            else:
-                raise
-    else:
-        raise
 
     logger.info('label dimension is %d' % lab_dim)
 
@@ -756,258 +931,31 @@ def main_function(cfg):
                       %(model_dir, cfg.combined_model_name, cfg.combined_feature_name, int(cfg.multistream_switch),
                         combined_model_arch, lab_dim, cfg.cmp_dim, cfg.train_file_number, cfg.hyper_params['learning_rate'])
 
-    model_prefix='duration'
-    hidden_dim = 256
-    n_epoch = 50
-    if cfg.AcousticModel:
-	model_prefix = 'acoustic'
-    else:
-	model_prefix = 'duration'
-
     ### DNN model training
     if cfg.TRAINDNN:
-
-        var_dict = load_covariance(var_file_dict, cfg.out_dimension_dict)
-
-    	logger.info('training DNN')
-
-        fid = open(norm_info_file, 'rb')
-        cmp_min_max = numpy.fromfile(fid, dtype=numpy.float32)
-        fid.close()
-        cmp_min_max = cmp_min_max.reshape((2, -1))
-        cmp_mean_vector = cmp_min_max[0, ]
-        cmp_std_vector  = cmp_min_max[1, ]
-
-
-        try:
-            os.makedirs(model_dir)
-        except OSError as e:
-            if e.errno == errno.EEXIST:
-                # not an error - just means directory already exists
-                pass
-            else:
-                logger.critical('Failed to create model directory %s' % model_dir)
-                logger.critical(' OS error was: %s' % e.strerror)
-                raise
-
-        try:
-            if cfg.framework == 'mxnet':
-                batch_size = int(cfg.hyper_params['batch_size'])
-                sequential_training = False
-                n_ins = lab_dim
-                n_outs = cfg.cmp_dim
-                input_dim = n_ins
-                output_dim = n_outs
-                model_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, model_prefix)
-                train_dataiter_all = TTSIter(x_file_list = train_x_file_list, y_file_list = train_y_file_list, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
-                val_dataiter_all = TTSIter(x_file_list = valid_x_file_list, y_file_list = valid_y_file_list, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
-                # model_dnn.train(train_dataiter, val_dataiter)
-
-                #train_x_file_list1 = train_x_file_list[0:len(train_x_file_list)/2]
-                #train_x_file_list2 = train_x_file_list[len(train_x_file_list)/2:]
-                #train_y_file_list1 = train_y_file_list[0:len(train_y_file_list)/2]
-                #train_y_file_list2 = train_y_file_list[len(train_y_file_list)/2:]
-                #valid_x_file_list1 = valid_x_file_list[0:len(valid_x_file_list)/2]
-                #valid_x_file_list2 = valid_x_file_list[len(valid_x_file_list)/2:]
-                #valid_y_file_list1 = valid_y_file_list[0:len(valid_y_file_list)/2]
-                #valid_y_file_list2 = valid_y_file_list[len(valid_y_file_list)/2:]
-                #train_dataiter1 = TTSIter(x_file_list = train_x_file_list1, y_file_list = train_y_file_list1, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
-                #train_dataiter2 = TTSIter(x_file_list = train_x_file_list2, y_file_list = train_y_file_list2, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = True)
-                #val_dataiter1 = TTSIter(x_file_list = valid_x_file_list1, y_file_list = valid_y_file_list1, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
-                #val_dataiter2 = TTSIter(x_file_list = valid_x_file_list2, y_file_list = valid_y_file_list2, n_ins = n_ins, n_outs = n_outs, batch_size = batch_size, sequential = sequential_training, shuffle = False)
-
-                #train_dataiter = mx.io.PrefetchingIter([train_dataiter1, train_dataiter2], rename_data=[{'data': 'data1'}, {'data': 'data2'}])
-                #val_dataiter = mx.io.PrefetchingIter([val_dataiter1, val_dataiter2], rename_data=[{'data': 'data1'}, {'data': 'data2'}])
-                #train_dataiter = mx.io.PrefetchingIter([train_dataiter1, train_dataiter2], rename_data = [{'data': 'data1'}, {'data': 'data2'}], rename_label = [{'label': 'label1'}, {'label': 'label2'}])
-                #val_dataiter = mx.io.PrefetchingIter([val_dataiter1, val_dataiter2], rename_data = [{'data': 'data1'}, {'data': 'data2'}], rename_label = [{'label': 'label1'}, {'label': 'label2'}])
-                #train_dataiter = mx.io.PrefetchingIter([train_dataiter1, train_dataiter2])
-                #val_dataiter = mx.io.PrefetchingIter([val_dataiter1, val_dataiter2])
-                train_dataiter = mx.io.PrefetchingIter(train_dataiter_all)
-                val_dataiter = mx.io.PrefetchingIter(val_dataiter_all)
-                #model_dnn.train(train_dataiter, val_dataiter)
-                model_dnn.train_module(train_dataiter, val_dataiter)
-                print "model train ok"
-
-            else:
-                train_DNN(train_xy_file_list = (train_x_file_list, train_y_file_list), \
-                          valid_xy_file_list = (valid_x_file_list, valid_y_file_list), \
-                          nnets_file_name = nnets_file_name, \
-                          n_ins = lab_dim, n_outs = cfg.cmp_dim, ms_outs = cfg.multistream_outs, \
-                          hyper_params = cfg.hyper_params, buffer_size = cfg.buffer_size, plot = cfg.plot, var_dict = var_dict,
-                          cmp_mean_vector = cmp_mean_vector, cmp_std_vector = cmp_std_vector)
-        except KeyboardInterrupt:
-            logger.critical('train_DNN interrupted via keyboard')
-            # Could 'raise' the exception further, but that causes a deep traceback to be printed
-            # which we don't care about for a keyboard interrupt. So, just bail out immediately
-            sys.exit(1)
-        except:
-            logger.critical('train_DNN threw an exception')
-            raise
-
-    ### generate parameters from DNN
-    temp_dir_name = '%s_%s_%d_%d_%d_%d_%d_%d_%d' \
-                    %(cfg.combined_model_name, cfg.combined_feature_name, int(cfg.do_post_filtering), \
-                      cfg.train_file_number, lab_dim, cfg.cmp_dim, \
-                      len(hidden_layer_size), hidden_layer_size[0], hidden_layer_size[-1])
-    gen_dir = os.path.join(gen_dir, temp_dir_name)
-
-    if cfg.GenTestList:
-        gen_file_id_list = test_id_list
-        test_x_file_list = nn_label_norm_file_list
-        ### comment the below line if you don't want the files in a separate folder
-        gen_dir = cfg.test_synth_dir
+        do_train(cfg, var_file_dict, norm_info_file, model_dir, nnets_file_name, train_x_file_list, train_y_file_list,
+                 valid_x_file_list, valid_y_file_list)
 
 
     if cfg.DNNGEN:
-    	logger.info('generating from DNN')
+        ### generate parameters from DNN
+        temp_dir_name = 'test_gen'
+        gen_dir = os.path.join(gen_dir, temp_dir_name)
 
-        try:
-            os.makedirs(gen_dir)
-        except OSError as e:
-            if e.errno == errno.EEXIST:
-                # not an error - just means directory already exists
-                pass
-            else:
-                logger.critical('Failed to create generation directory %s' % gen_dir)
-                logger.critical(' OS error was: %s' % e.strerror)
-                raise
+        if cfg.GenTestList:
+            gen_file_id_list = test_id_list
+            test_x_file_list = nn_label_norm_file_list
+            ### comment the below line if you don't want the files in a separate folder
+            gen_dir = cfg.test_synth_dir
+        do_generate(cfg, gen_dir, gen_file_id_list, test_x_file_list, nnets_file_name, norm_info_file, var_file_dict)
 
-        gen_file_list = prepare_file_path_list(gen_file_id_list, gen_dir, cfg.cmp_ext)
-
-        if cfg.framework == 'mxnet':
-            prefix = '%s-%04d-%03d' % (model_prefix, hidden_dim, n_epoch)
-            print prefix
-            model_dnn = mx.model.FeedForward.load(prefix, 0)
-            dnn_generation_mxnet(test_x_file_list, model_dnn, lab_dim, cfg.cmp_dim, gen_file_list)
-        else:
-            dnn_generation(test_x_file_list, nnets_file_name, lab_dim, cfg.cmp_dim, gen_file_list)
-
-    	logger.debug('denormalising generated output using method %s' % cfg.output_feature_normalisation)
-
-        fid = open(norm_info_file, 'rb')
-        cmp_min_max = numpy.fromfile(fid, dtype=numpy.float32)
-        fid.close()
-        cmp_min_max = cmp_min_max.reshape((2, -1))
-        cmp_min_vector = cmp_min_max[0, ]
-        cmp_max_vector = cmp_min_max[1, ]
-
-        if cfg.output_feature_normalisation == 'MVN':
-            denormaliser = MeanVarianceNorm(feature_dimension = cfg.cmp_dim)
-            denormaliser.feature_denormalisation(gen_file_list, gen_file_list, cmp_min_vector, cmp_max_vector)
-
-        elif cfg.output_feature_normalisation == 'MINMAX':
-            denormaliser = MinMaxNormalisation(cfg.cmp_dim, min_value = 0.01, max_value = 0.99, min_vector = cmp_min_vector, max_vector = cmp_max_vector)
-            denormaliser.denormalise_data(gen_file_list, gen_file_list)
-        else:
-            logger.critical('denormalising method %s is not supported!\n' %(cfg.output_feature_normalisation))
-            raise
-
-        if cfg.AcousticModel:
-            ##perform MLPG to smooth parameter trajectory
-            ## lf0 is included, the output features much have vuv.
-            generator = ParameterGeneration(gen_wav_features = cfg.gen_wav_features, enforce_silence = cfg.enforce_silence)
-            generator.acoustic_decomposition(gen_file_list, cfg.cmp_dim, cfg.out_dimension_dict, cfg.file_extension_dict, var_file_dict, do_MLPG=cfg.do_MLPG, cfg=cfg)
-
-        if cfg.DurationModel:
-            ### Perform duration normalization(min. state dur set to 1) ###
-            gen_dur_list   = prepare_file_path_list(gen_file_id_list, gen_dir, cfg.dur_ext)
-            gen_label_list = prepare_file_path_list(gen_file_id_list, gen_dir, cfg.lab_ext)
-            in_gen_label_align_file_list = prepare_file_path_list(gen_file_id_list, cfg.in_label_align_dir, cfg.lab_ext, False)
-
-            generator = ParameterGeneration(gen_wav_features = cfg.gen_wav_features)
-            generator.duration_decomposition(gen_file_list, cfg.cmp_dim, cfg.out_dimension_dict, cfg.file_extension_dict)
-
-            label_cppmary1 = LabelCppmary()
-            label_cppmary1.prepare_predict_label(in_gen_label_align_file_list, gen_label_list, gen_dur_list)
-
-
-    ### generate wav
-    if cfg.GENWAV:
-    	logger.info('reconstructing waveform(s)')
-    	generate_wav(gen_dir, gen_file_id_list, cfg)     # generated speech
-#    	generate_wav(nn_cmp_dir, gen_file_id_list, cfg)  # reference copy synthesis speech
 
 # load the mxnet dnn layer and merge the first and final layer into the dnn
     merge_norm_dnn = True
     if merge_norm_dnn and cfg.framework == 'mxnet':
-        prefix = '%s-%04d-%03d' % (model_prefix, hidden_dim, n_epoch)
-        sym, arg_params, aux_params = mx.model.load_checkpoint(prefix, 0)
-        first_layer_w = arg_params['fc1_weight'].asnumpy()
-        first_layer_b  = arg_params['fc1_bias'].asnumpy()
+        prefix = '%s-%04d-%03d' % (cfg.model_prefix, cfg.hidden_dim, cfg.training_epochs)
+        merge_dnn(prefix, label_norm_file, lab_dim, norm_info_file)
 
-        print first_layer_w.shape, first_layer_b.shape
-
-        io_fun = BinaryIOCollection()
-
-        lab_min_max, dims = io_fun.load_binary_file_frame(label_norm_file, lab_dim)
-        lab_min_vec = lab_min_max[0, :]
-        lab_max_vec = lab_min_max[1, :]
-        target_min = 0.01
-        target_max = 0.99
-
-        print lab_min_vec.shape, lab_max_vec.shape
-
-        lab_diff_vec = lab_max_vec - lab_min_vec
-
-        lab_diff_vec[lab_diff_vec==0] = 1.0
-
-        target_diff = target_max - target_min
-
-        factor_w = first_layer_w.copy()
-        b = first_layer_b.copy()
-
-        print 'orig w mean'
-        print np.mean(first_layer_w)
-
-        for i in xrange(lab_dim):
-            factor_w[:, i] = factor_w[:, i] / lab_diff_vec[i]
-
-        print np.mean(factor_w)
-
-        w = factor_w * target_diff
-
-        b = b + factor_w.dot(target_min * lab_diff_vec - lab_min_vec * target_diff)
-
-        print first_layer_b[1:10]
-        print b[1:10]
-        print np.mean(w)
-        print np.mean(factor_w)
-
-        first_layer_w = w.copy()
-        first_layer_b = b.copy()
-
-
-        print 'process the cmp file'
-        final_layer_w = arg_params['fc7_weight'].asnumpy()
-        final_layer_b  = arg_params['fc7_bias'].asnumpy()
-
-        cmp_mean_var, dims = io_fun.load_binary_file_frame(norm_info_file, cfg.cmp_dim)
-        cmp_mean = cmp_mean_var[0, :]
-        cmp_var = cmp_mean_var[1, :]
-        print cmp_mean.shape, cmp_var.shape
-
-        w = final_layer_w.copy()
-        b = final_layer_b.copy()
-
-        for i in xrange(cfg.cmp_dim):
-            w[i,:] = w[i,:] * cmp_var[i]
-
-        b = b * cmp_var + cmp_mean
-
-        #print final_layer_b
-        #print b
-        #print final_layer_w[:, 0]
-        #print cmp_var
-        #print w[:, 0]
-
-        final_layer_w = w.copy()
-        final_layer_b = b.copy()
-
-        arg_params['fc1_weight']  = mx.nd.array(first_layer_w)
-        arg_params['fc1_bias']  = mx.nd.array(first_layer_b)
-        arg_params['fc7_weight']  = mx.nd.array(final_layer_w)
-        arg_params['fc7_bias']  = mx.nd.array(final_layer_b)
-        mx.model.save_checkpoint(model_prefix, 100, sym, arg_params, aux_params)
 
 
 if __name__ == '__main__':

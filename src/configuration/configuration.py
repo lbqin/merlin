@@ -234,6 +234,9 @@ class configuration(object):
             ('output_layer_type'    , 'LINEAR'                                          , 'Architecture', 'output_layer_type'),
             ('sequential_training'  , False                                           , 'Architecture', 'sequential_training'),
             ('dropout_rate'         , 0.0                                               , 'Architecture', 'dropout_rate'),
+            ('lab_dim', 500, 'Architecture', 'lab_dim'),
+            ('hidden_dim', 512, 'Architecture', 'hidden_dim'),
+            ('model_prefix', 'duration', 'Architecture', 'model_prefix'),
 
 	    ## some config variables for token projection DNN
             ('scheme'               , 'stagewise'                   , 'Architecture', 'scheme'),

@@ -99,6 +99,7 @@ class LabelCppmary(object):
 
         io_funcs.array_to_binary_file(labelMat, output_file)
 
+    # 将最后5维最为时长进行扩展，并增加特征。lab维度变化：-5 + 9
     def extract_acousitc_label_features(self, orig_file, output_file):
         io_funcs = BinaryIOCollection()
         totalMat = io_funcs.file2matrix(orig_file, numpy.int)
