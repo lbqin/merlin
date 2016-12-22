@@ -128,9 +128,9 @@ echo "warmup_epoch     : 10" >> $duration_config_file
 echo "warmup_momentum  : 0.3" >> $duration_config_file
 
 echo "" >> $duration_config_file
-echo "training_epochs  : 20" >> $duration_config_file
+echo "training_epochs  : 50" >> $duration_config_file
 echo "lab_dim : 546" >> $duration_config_file
-echo "hidden_dim : 256" >> $duration_config_file
+echo "hidden_dim : 512" >> $duration_config_file
 echo "model_prefix : duration" >> $duration_config_file
 
 
@@ -361,7 +361,7 @@ echo "warmup_epoch     : 10" >> $acoustic_config_file
 echo "warmup_momentum  : 0.3" >> $acoustic_config_file
 
 echo "" >> $acoustic_config_file
-echo "training_epochs  : 20" >> $acoustic_config_file
+echo "training_epochs  : 50" >> $acoustic_config_file
 echo "lab_dim : 555" >> $acoustic_config_file
 echo "hidden_dim : 512" >> $acoustic_config_file
 echo "model_prefix : acoustic" >> $acoustic_config_file
