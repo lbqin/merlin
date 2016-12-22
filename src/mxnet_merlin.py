@@ -84,12 +84,12 @@ class MxnetTTs():
         mod = None
         batch_end_callbacks = [mx.callback.Speedometer(self.batch_size, 512), ]
 
-        use_pretrain = False
+        use_pretrain = True
         prefix = '%s-%04d-%03d' % (self.output_type, self.hidden_dim, self.n_epoch)
 
         if use_pretrain:
             logging.info('loading checkpoint')
-            pretrain_name = 'pretrain/' + self.output_type
+            pretrain_name = self.output_type
             sym, arg_params, aux_params = mx.model.load_checkpoint(pretrain_name, 0)
             mod = mx.mod.Module(sym, label_names=('label',), context=devs)
             mod.bind(data_shapes=train_dataiter.provide_data, label_shapes=train_dataiter.provide_label, for_training=True)

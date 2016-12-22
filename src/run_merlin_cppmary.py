@@ -807,6 +807,8 @@ def main_function(cfg):
     ####prepare environment
     try:
         file_id_list = read_file_list(cfg.file_id_scp)
+        if len(file_id_list) > 100:
+            file_id_list = file_id_list[0:100]
         random.seed(281638)
         random.shuffle(file_id_list)
         total_num = len(file_id_list)

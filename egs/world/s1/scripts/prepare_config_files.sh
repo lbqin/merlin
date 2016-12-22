@@ -158,10 +158,17 @@ if [ $isTrain -gt 0 ]; then
     echo "" >> $duration_config_file
     echo "# sub-processes" >> $duration_config_file
     echo "" >> $duration_config_file
-    echo "NORMLAB  : True" >> $duration_config_file
-    echo "MAKEDUR  : True" >> $duration_config_file
-    echo "MAKECMP  : True" >> $duration_config_file
-    echo "NORMCMP  : True" >> $duration_config_file
+    if [ $prepare_data -eq 0 ]; then
+        echo "NORMLAB  : False" >> $duration_config_file
+        echo "MAKEDUR  : False" >> $duration_config_file
+        echo "MAKECMP  : False" >> $duration_config_file
+        echo "NORMCMP  : False" >> $duration_config_file
+    else
+        echo "NORMLAB  : True" >> $duration_config_file
+        echo "MAKEDUR  : True" >> $duration_config_file
+        echo "MAKECMP  : True" >> $duration_config_file
+        echo "NORMCMP  : True" >> $duration_config_file
+    fi
     echo "" >> $duration_config_file
     echo "TRAINDNN : True" >> $duration_config_file
     echo "DNNGEN   : True" >> $duration_config_file
@@ -350,7 +357,7 @@ echo "" >> $acoustic_config_file
 echo "training_epochs  : ${epoch_num}" >> $acoustic_config_file
 echo "lab_dim : ${acoustic_lab_dim}" >> $acoustic_config_file
 echo "hidden_dim : ${acoustic_hidden_dim}" >> $acoustic_config_file
-echo "model_prefix : acoustic" >> $acoustic_config_file
+echo "model_prefix : ${acoustic_model_prefix}" >> $acoustic_config_file
 
 echo "" >> $acoustic_config_file
 echo "[Streams]" >> $acoustic_config_file
@@ -380,9 +387,15 @@ if [ $isTrain -gt 0 ]; then
     echo "" >> $acoustic_config_file
     echo "# sub-processes" >> $acoustic_config_file
     echo "" >> $acoustic_config_file
-    echo "NORMLAB  : True" >> $acoustic_config_file
-    echo "MAKECMP  : True" >> $acoustic_config_file
-    echo "NORMCMP  : True" >> $acoustic_config_file
+    if [ $prepare_data -eq 0 ]; then
+        echo "NORMLAB  : False" >> $acoustic_config_file
+        echo "MAKECMP  : False" >> $acoustic_config_file
+        echo "NORMCMP  : False" >> $acoustic_config_file
+    else
+        echo "NORMLAB  : True" >> $acoustic_config_file
+        echo "MAKECMP  : True" >> $acoustic_config_file
+        echo "NORMCMP  : True" >> $acoustic_config_file
+    fi
     echo "" >> $acoustic_config_file
     echo "TRAINDNN : True" >> $acoustic_config_file
     echo "DNNGEN   : True" >> $acoustic_config_file

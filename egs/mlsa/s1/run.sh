@@ -42,13 +42,16 @@ echo "data is ready!"
 ./scripts/prepare_config_files.sh $global_config_file 1
 
 ### Step 2: train duration model ###
-echo "Step 2: training duration model..."
-./scripts/submit.sh ${MerlinDir}/src/run_merlin_cppmary.py conf/duration_${Voice}.conf
+if [ $train_duration -gt 0 ]; then
+    echo "Step 2: training duration model..."
+    ./scripts/submit.sh ${MerlinDir}/src/run_merlin_cppmary.py conf/duration_${Voice}.conf
+fi
 
 ### Step 3: train acoustic model ###
-echo "Step 3: training acoustic model..."
-./scripts/submit.sh ${MerlinDir}/src/run_merlin_cppmary.py conf/acoustic_${Voice}.conf
-
+if [ $train_acoustic -gt 0 ]; then
+    echo "Step 3: training acoustic model..."
+    ./scripts/submit.sh ${MerlinDir}/src/run_merlin_cppmary.py conf/acoustic_${Voice}.conf
+fi
 
 ### Step 4: synthesize speech   ###
 echo "Step 4: synthesizing speech..."
