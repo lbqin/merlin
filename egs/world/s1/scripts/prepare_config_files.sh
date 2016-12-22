@@ -1,7 +1,7 @@
 #!/bin/bash
 
-if test "$#" -ne 1; then
-    echo "Usage: ./scripts/prepare_config_files.sh conf/global_settings.cfg"
+if test "$#" -ne 2; then
+    echo "Usage: ./scripts/prepare_config_files.sh conf/global_settings.cfg 0/1"
     exit 1
 fi
 
@@ -12,11 +12,19 @@ else
     source $1
 fi
 
+isTrain=$2
+
 #########################################
 ######## duration config file ###########
 #########################################
 
 duration_config_file=conf/duration_${Voice}.conf
+acoustic_config_file=conf/acoustic_${Voice}.conf
+
+if [ $isTrain -eq 0 ]; then
+    duration_config_file=conf/test_dur_synth_${Voice}.conf
+    acoustic_config_file=conf/test_synth_${Voice}.conf
+fi
 
 echo "[DEFAULT]" > $duration_config_file 
 
@@ -40,6 +48,9 @@ echo "data: %(work)s/data" >> $duration_config_file
 echo "" >> $duration_config_file
 echo "# list of file basenames, training and validation in a single list" >> $duration_config_file
 echo "file_id_list: %(data)s/${FileIDList}" >> $duration_config_file
+if [ $isTrain -eq 0 ]; then
+    echo "test_id_list: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/test_id_list.scp" >> $duration_config_file
+fi
 
 echo "" >> $duration_config_file
 echo "# output duration features" >> $duration_config_file 
@@ -65,7 +76,12 @@ echo "" >> $duration_config_file
 echo "silence_pattern : ['*-sil+*']" >> $duration_config_file
 echo "label_type : ${Labels}" >> $duration_config_file
 echo "label_style: cppmary" >> $duration_config_file
-echo "label_align: %(TOPLEVEL)s/experiments/${Voice}/duration_model/data/lab" >> $duration_config_file
+if [ $isTrain -gt 0 ]; then
+    echo "label_align: %(TOPLEVEL)s/experiments/${Voice}/duration_model/data/lab" >> $duration_config_file
+else
+    echo "label_align: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/prompt-lab" >> $duration_config_file
+fi
+
 echo "question_file_name  : %(Merlin)s/misc/questions/${QuestionFile}" >> $duration_config_file
 
 echo "" >> $duration_config_file
@@ -88,17 +104,17 @@ else
     echo "These labels ($Lables) are not supported as of now...please use state_align or phone_align!!"
 fi
 
+if [ $isTrain -eq 0 ]; then
+    echo "" >> $duration_config_file
+    echo "[Waveform]" >> $duration_config_file
+    echo "" >> $duration_config_file
+    echo "test_synth_dir :  %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/gen-lab" >> $duration_config_file
+fi
+
 echo "" >> $duration_config_file
 echo "[Architecture]" >> $duration_config_file
-
-if [ "$Voice" == "labixx1" ]
-then
-    echo "hidden_layer_size  : [512, 512, 512, 512]" >> $duration_config_file
-    echo "hidden_layer_type  : ['TANH', 'TANH', 'TANH', 'TANH']" >> $duration_config_file
-else
-    echo "hidden_layer_size  : [1024, 1024, 1024, 1024, 1024, 1024]" >> $duration_config_file
-    echo "hidden_layer_type  : ['TANH', 'TANH', 'TANH', 'TANH', 'TANH', 'TANH']" >> $duration_config_file
-fi
+echo "hidden_layer_size  : [1024, 1024, 1024, 1024, 1024, 1024]" >> $duration_config_file
+echo "hidden_layer_type  : ['TANH', 'TANH', 'TANH', 'TANH', 'TANH', 'TANH']" >> $duration_config_file
 
 echo "#if RNN or sequential training is used, please set sequential_training to True." >> $duration_config_file
 echo "sequential_training : False" >> $duration_config_file
@@ -106,13 +122,17 @@ echo "dropout_rate : 0.0" >> $duration_config_file
 
 echo "" >> $duration_config_file
 echo "learning_rate    : 0.002" >> $duration_config_file
-echo "batch_size       : 64" >> $duration_config_file
+echo "batch_size       : ${duration_batch_size}" >> $duration_config_file
 echo "output_activation: linear" >> $duration_config_file
 echo "warmup_epoch     : 10" >> $duration_config_file
 echo "warmup_momentum  : 0.3" >> $duration_config_file
 
 echo "" >> $duration_config_file
-echo "training_epochs  : 25" >> $duration_config_file
+echo "training_epochs  : ${epoch_num}" >> $duration_config_file
+echo "lab_dim : ${duration_lab_dim}" >> $duration_config_file
+echo "hidden_dim : ${duration_hidden_dim}" >> $duration_config_file
+echo "model_prefix : ${duration_model_prefix}" >> $duration_config_file
+
 
 echo "" >> $duration_config_file
 echo "[Streams]" >> $duration_config_file
@@ -122,9 +142,6 @@ echo "output_features      : ['dur']" >> $duration_config_file
 echo "" >> $duration_config_file
 echo "" >> $duration_config_file
 echo "[Data]" >> $duration_config_file
-echo "train_file_number: ${Train}" >> $duration_config_file
-echo "valid_file_number: ${Valid}" >> $duration_config_file
-echo "test_file_number : ${Test}" >> $duration_config_file
 echo "#buffer size of each block of data to" >> $duration_config_file
 echo "buffer_size: 200000" >> $duration_config_file
 
@@ -132,34 +149,48 @@ echo "" >> $duration_config_file
 echo "" >> $duration_config_file
 echo "[Processes]" >> $duration_config_file
 
-echo "" >> $duration_config_file
-echo "# Main processes" >> $duration_config_file
-echo "" >> $duration_config_file
-echo "DurationModel : True" >> $duration_config_file
-echo "framework : ${framework}" >> $duration_config_file
-
-echo "" >> $duration_config_file
-echo "# sub-processes" >> $duration_config_file
-echo "" >> $duration_config_file
-echo "NORMLAB  : True" >> $duration_config_file
-echo "MAKEDUR  : True" >> $duration_config_file
-echo "MAKECMP  : True" >> $duration_config_file
-echo "NORMCMP  : True" >> $duration_config_file
-echo "" >> $duration_config_file
-echo "TRAINDNN : True" >> $duration_config_file
-echo "DNNGEN   : True" >> $duration_config_file
-echo "" >> $duration_config_file
-echo "CALMCD   : True" >> $duration_config_file
-echo "" >> $duration_config_file
-echo "" >> $duration_config_file
-
-echo "Duration configuration settings stored in $duration_config_file"
+if [ $isTrain -gt 0 ]; then
+    echo "" >> $duration_config_file
+    echo "# Main processes" >> $duration_config_file
+    echo "" >> $duration_config_file
+    echo "DurationModel : True" >> $duration_config_file
+    echo "framework : ${framework}" >> $duration_config_file
+    echo "" >> $duration_config_file
+    echo "# sub-processes" >> $duration_config_file
+    echo "" >> $duration_config_file
+    echo "NORMLAB  : True" >> $duration_config_file
+    echo "MAKEDUR  : True" >> $duration_config_file
+    echo "MAKECMP  : True" >> $duration_config_file
+    echo "NORMCMP  : True" >> $duration_config_file
+    echo "" >> $duration_config_file
+    echo "TRAINDNN : True" >> $duration_config_file
+    echo "DNNGEN   : True" >> $duration_config_file
+    echo "" >> $duration_config_file
+    echo "CALMCD   : True" >> $duration_config_file
+    echo "" >> $duration_config_file
+    echo "" >> $duration_config_file
+    echo "Duration configuration settings stored in $duration_config_file"
+else
+    echo "" >> $duration_config_file
+    echo "# Main processes" >> $duration_config_file
+    echo "" >> $duration_config_file
+    echo "DurationModel : True" >> $duration_config_file
+    echo "framework : ${framework}" >> $duration_config_file
+    echo "GenTestList   : True" >> $duration_config_file
+    echo "" >> $duration_config_file
+    echo "# sub-processes" >> $duration_config_file
+    echo "" >> $duration_config_file
+    echo "NORMLAB  : True" >> $duration_config_file
+    echo "" >> $duration_config_file
+    echo "DNNGEN   : True" >> $duration_config_file
+    echo "" >> $duration_config_file
+    echo "" >> $duration_config_file
+    echo "Duration configuration settings stored in $duration_config_file"
+fi
 
 #########################################
 ######## acoustic config file ###########
 #########################################
-
-acoustic_config_file=conf/acoustic_${Voice}.conf
 
 echo "[DEFAULT]" > $acoustic_config_file
 
@@ -183,6 +214,9 @@ echo "data: %(work)s/data" >> $acoustic_config_file
 echo "" >> $acoustic_config_file
 echo "# list of file basenames, training and validation in a single list" >> $acoustic_config_file
 echo "file_id_list: %(data)s/${FileIDList}" >> $acoustic_config_file
+if [ $isTrain -eq 0 ]; then
+    echo "test_id_list: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/test_id_list.scp" >> $acoustic_config_file
+fi
 
 echo "" >> $acoustic_config_file
 echo "" >> $acoustic_config_file
@@ -206,6 +240,7 @@ echo "log_file: %(work)s/log/mylogfilename.log" >> $acoustic_config_file
 echo "" >> $acoustic_config_file
 echo "# where are my tools" >> $acoustic_config_file
 echo "sptk:  %(Merlin)s/tools/SPTK-3.7/bin" >> $acoustic_config_file
+echo "mlsa:  %(Merlin)s/tools/mlsa/" >> $acoustic_config_file
 
 if [ "$Vocoder" == "STRAIGHT" ]
 then
@@ -221,11 +256,17 @@ echo "" >> $acoustic_config_file
 echo "[Labels]" >> $acoustic_config_file
 
 echo "" >> $acoustic_config_file
-echo "do_post_filtering: False" >> $acoustic_config_file
+if [ $isTrain -eq 0 ]; then
+    echo "enforce_silence : True" >> $acoustic_config_file
+fi
 echo "silence_pattern : ['*-sil+*']" >> $acoustic_config_file
 echo "label_type : ${Labels}" >> $acoustic_config_file
 echo "label_style: cppmary" >> $acoustic_config_file
-echo "label_align: %(TOPLEVEL)s/experiments/${Voice}/acoustic_model/data/lab" >> $acoustic_config_file
+if [ $isTrain -gt 0 ]; then
+    echo "label_align: %(TOPLEVEL)s/experiments/${Voice}/acoustic_model/data/lab" >> $acoustic_config_file
+else
+    echo "label_align: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/gen-lab" >> $acoustic_config_file
+fi
 echo "question_file_name  : %(Merlin)s/misc/questions/${QuestionFile}" >> $acoustic_config_file
 
 echo "" >> $acoustic_config_file
@@ -247,15 +288,21 @@ fi
 echo "" >> $acoustic_config_file
 echo "" >> $acoustic_config_file
 echo "[Outputs]" >> $acoustic_config_file
-echo "mgc    : 35" >> $acoustic_config_file
-echo "dmgc   : 105" >> $acoustic_config_file
-echo "bap    : 5" >> $acoustic_config_file
-echo "dbap   : 15" >> $acoustic_config_file
+
+echo "mgc    : ${mgc_order}" >> $acoustic_config_file
+echo "dmgc   : $(($mgc_order * 3))" >> $acoustic_config_file
+echo "bap    : ${bap_order}" >> $acoustic_config_file
+echo "dbap   : $(($bap_order * 3))" >> $acoustic_config_file
 echo "lf0    : 1" >> $acoustic_config_file
 echo "dlf0   : 3" >> $acoustic_config_file
 
 echo "" >> $acoustic_config_file
 echo "[Waveform]" >> $acoustic_config_file
+
+if [ $isTrain -eq 0 ]; then
+    echo "" >> $acoustic_config_file
+    echo "test_synth_dir :  %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/wav" >> $acoustic_config_file
+fi
 
 echo "" >> $acoustic_config_file
 echo "vocoder_type : ${Vocoder}" >> $acoustic_config_file
@@ -285,14 +332,8 @@ fi
 echo "" >> $acoustic_config_file
 echo "[Architecture]" >> $acoustic_config_file
 
-if [ "$Voice" == "labixx1" ]
-then
-    echo "hidden_layer_size  : [512, 512, 512, 512]" >> $acoustic_config_file
-    echo "hidden_layer_type  : ['TANH', 'TANH', 'TANH', 'TANH']" >> $acoustic_config_file
-else
-    echo "hidden_layer_size  : [1024, 1024, 1024, 1024, 1024, 1024]" >> $acoustic_config_file
-    echo "hidden_layer_type  : ['TANH', 'TANH', 'TANH', 'TANH', 'TANH', 'TANH']" >> $acoustic_config_file
-fi
+echo "hidden_layer_size  : [1024, 1024, 1024, 1024, 1024, 1024]" >> $acoustic_config_file
+echo "hidden_layer_type  : ['TANH', 'TANH', 'TANH', 'TANH', 'TANH', 'TANH']" >> $acoustic_config_file
 
 echo "#if RNN or sequential training is used, please set sequential_training to True." >> $acoustic_config_file
 echo "sequential_training : False" >> $acoustic_config_file
@@ -300,25 +341,28 @@ echo "dropout_rate : 0.0" >> $acoustic_config_file
 
 echo "" >> $acoustic_config_file
 echo "learning_rate    : 0.002" >> $acoustic_config_file
-echo "batch_size       : 256" >> $acoustic_config_file
+echo "batch_size       : ${acoustic_batch_size}" >> $acoustic_config_file
 echo "output_activation: linear" >> $acoustic_config_file
 echo "warmup_epoch     : 10" >> $acoustic_config_file
 echo "warmup_momentum  : 0.3" >> $acoustic_config_file
 
 echo "" >> $acoustic_config_file
-echo "training_epochs  : 25" >> $acoustic_config_file
+echo "training_epochs  : ${epoch_num}" >> $acoustic_config_file
+echo "lab_dim : ${acoustic_lab_dim}" >> $acoustic_config_file
+echo "hidden_dim : ${acoustic_hidden_dim}" >> $acoustic_config_file
+echo "model_prefix : acoustic" >> $acoustic_config_file
 
 echo "" >> $acoustic_config_file
 echo "[Streams]" >> $acoustic_config_file
 echo "# which feature to be used in the output" >> $acoustic_config_file
 echo "output_features      : ['mgc', 'lf0', 'vuv', 'bap']" >> $acoustic_config_file
+if [ $isTrain -eq 0 ]; then
+    echo "gen_wav_features     : ['mgc', 'lf0', 'bap']" >> $acoustic_config_file
+fi
 
 echo "" >> $acoustic_config_file
 echo "" >> $acoustic_config_file
 echo "[Data]" >> $acoustic_config_file
-echo "train_file_number: ${Train}" >> $acoustic_config_file
-echo "valid_file_number: ${Valid}" >> $acoustic_config_file
-echo "test_file_number : ${Test}" >> $acoustic_config_file
 echo "#buffer size of each block of data to" >> $acoustic_config_file
 echo "buffer_size: 200000" >> $acoustic_config_file
 
@@ -329,24 +373,40 @@ echo "[Processes]" >> $acoustic_config_file
 echo "" >> $acoustic_config_file
 echo "# Main processes" >> $acoustic_config_file
 
-echo "" >> $acoustic_config_file
-echo "AcousticModel : True" >> $acoustic_config_file
-echo "framework : ${framework}" >> $acoustic_config_file
-
-echo "" >> $acoustic_config_file
-echo "# sub-processes" >> $acoustic_config_file
-echo "" >> $acoustic_config_file
-echo "NORMLAB  : True" >> $acoustic_config_file
-echo "MAKECMP  : True" >> $acoustic_config_file
-echo "NORMCMP  : True" >> $acoustic_config_file
-echo "" >> $acoustic_config_file
-echo "TRAINDNN : True" >> $acoustic_config_file
-echo "DNNGEN   : True" >> $acoustic_config_file
-echo "" >> $acoustic_config_file
-echo "GENWAV   : True" >> $acoustic_config_file
-echo "CALMCD   : True" >> $acoustic_config_file
-echo "" >> $acoustic_config_file
-echo "" >> $acoustic_config_file
-
-echo "Acoustic configuration settings stored in $acoustic_config_file"
+if [ $isTrain -gt 0 ]; then
+    echo "" >> $acoustic_config_file
+    echo "AcousticModel : True" >> $acoustic_config_file
+    echo "framework : ${framework}" >> $acoustic_config_file
+    echo "" >> $acoustic_config_file
+    echo "# sub-processes" >> $acoustic_config_file
+    echo "" >> $acoustic_config_file
+    echo "NORMLAB  : True" >> $acoustic_config_file
+    echo "MAKECMP  : True" >> $acoustic_config_file
+    echo "NORMCMP  : True" >> $acoustic_config_file
+    echo "" >> $acoustic_config_file
+    echo "TRAINDNN : True" >> $acoustic_config_file
+    echo "DNNGEN   : True" >> $acoustic_config_file
+    echo "" >> $acoustic_config_file
+    echo "GENWAV   : True" >> $acoustic_config_file
+    echo "CALMCD   : True" >> $acoustic_config_file
+    echo "" >> $acoustic_config_file
+    echo "" >> $acoustic_config_file
+    echo "Acoustic configuration settings stored in $acoustic_config_file"
+else
+    echo "" >> $acoustic_config_file
+    echo "AcousticModel : True" >> $acoustic_config_file
+    echo "framework : ${framework}" >> $acoustic_config_file
+    echo "GenTestList   : True" >> $acoustic_config_file
+    echo "" >> $acoustic_config_file
+    echo "# sub-processes" >> $acoustic_config_file
+    echo "" >> $acoustic_config_file
+    echo "NORMLAB  : True" >> $acoustic_config_file
+    echo "" >> $acoustic_config_file
+    echo "DNNGEN   : True" >> $acoustic_config_file
+    echo "" >> $acoustic_config_file
+    echo "GENWAV   : True" >> $acoustic_config_file
+    echo "" >> $acoustic_config_file
+    echo "" >> $acoustic_config_file
+    echo "Acoustic configuration settings stored in $acoustic_config_file"
+fi
 
