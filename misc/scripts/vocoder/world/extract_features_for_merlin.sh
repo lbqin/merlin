@@ -8,10 +8,10 @@ world="${merlin_dir}/tools/WORLD/build"
 sptk="${merlin_dir}/tools/SPTK-3.7/bin"
 
 # input audio directory
-wav_dir="/home/sooda/data/tts/labixx_48k/wav"
+wav_dir="/home/sooda/data/tts/ehh_48k/wav"
 
 # Output features directory
-out_dir="${merlin_dir}/egs/labixx/s1/labixx_data/acoustic_data"
+out_dir="/tmp/acoustic_data_world"
 
 sp_dir="${out_dir}/sp"
 mgc_dir="${out_dir}/mgc"
