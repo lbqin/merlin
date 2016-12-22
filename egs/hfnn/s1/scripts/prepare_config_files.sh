@@ -240,6 +240,7 @@ echo "log_file: %(work)s/log/mylogfilename.log" >> $acoustic_config_file
 echo "" >> $acoustic_config_file
 echo "# where are my tools" >> $acoustic_config_file
 echo "sptk:  %(Merlin)s/tools/SPTK-3.7/bin" >> $acoustic_config_file
+echo "mlsa:  %(Merlin)s/tools/mlsa/" >> $acoustic_config_file
 
 if [ "$Vocoder" == "STRAIGHT" ]
 then

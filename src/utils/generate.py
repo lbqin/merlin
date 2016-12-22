@@ -190,7 +190,7 @@ def generate_wav(gen_dir, file_id_list, cfg):
         os.chdir(gen_dir)
 
         ### post-filtering
-        if cfg.do_post_filtering:
+        if cfg.do_post_filtering and cfg.vocoder_type != 'mlsa':
             line = "echo 1 1 "
             for i in range(2, cfg.mgc_dim):
                 line = line + str(pf_coef) + " "
@@ -277,14 +277,16 @@ def generate_wav(gen_dir, file_id_list, cfg):
             run_process('rm -f {sp} {f0}'.format(sp=files['sp'],f0=files['f0']))
 
         elif cfg.vocoder_type == 'mlsa':
-            merlin_home='/home/sooda/speech/merlin/'
-            mlsa_home=merlin_home + 'tools/mlsa/'
-            #mlsa_syn=mlsa_home + 'mlsaSynWithFilenames_mgc60_77'
-            mlsa_syn=mlsa_home + 'mlsaSynWithFilenames_mgc60_55'
-            #mlsa_syn=mlsa_home + 'mlsaSynWithFilenames'
-            mix_filter_file=mlsa_home + 'mix_excitation_5filters_199taps_48Kz.txt'
+            mlsa_home=cfg.mlsa
+            mlsa_syn = None
+            if cfg.mgc_dim == 35:
+                mlsa_syn=mlsa_home + '/mlsaSynWithFilenames'
+            elif cfg.mgc_dim == 60:
+                mlsa_syn = mlsa_home + '/mlsaSynWithFilenames_mgc60_55'
+            else:
+                raise ValueError('mgc order is %d not support, current support 35 or 60' % cfg.mgc_dim)
+            mix_filter_file=mlsa_home + '/mix_excitation_5filters_199taps_48Kz.txt'
             mlsa_cmd = '{cmdd} {filter_file} {mgc} {lf0} {bap} {wav} 1 {sr}'.format(cmdd=mlsa_syn, filter_file=mix_filter_file,mgc=files['mgc'], lf0=files['lf0'], bap=files['bap'], sr=cfg.sr, wav=files['wav'])
-            #mlsa_cmd = '{cmdd} {filter_file} {mgc} {lf0} {bap} {wav} 1 {sr}'.format(cmdd=mlsa_syn, filter_file=mix_filter_file,mgc=mgc_file_name, lf0=files['lf0'], bap=files['bap'], sr=cfg.sr, wav=files['wav'])
             print mlsa_cmd
             run_process(mlsa_cmd)
         else:

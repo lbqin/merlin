@@ -227,6 +227,7 @@ class configuration(object):
             ('sptk_bindir', 'tools/SPTK-3.7/bin', 'Paths','sptk'),
             ('straight_bindir', 'tools/straight/bin', 'Paths','straight'),
             ('world_bindir', 'tools/WORLD/build', 'Paths','world'),
+            ('mlsa', 'tools/mlsa', 'Paths', 'mlsa'),
 
             ('network_type'           , 'RNN'                                           , 'Architecture', 'network_type'),
             ('model_type'           , 'DNN'                                             , 'Architecture', 'model_type'),
