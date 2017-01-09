@@ -132,6 +132,8 @@ echo "training_epochs  : ${epoch_num}" >> $duration_config_file
 echo "lab_dim : ${duration_lab_dim}" >> $duration_config_file
 echo "hidden_dim : ${duration_hidden_dim}" >> $duration_config_file
 echo "model_prefix : ${duration_model_prefix}" >> $duration_config_file
+echo "pretrain_prefix : ${pretrain_duration_model_prefix}" >> $duration_config_file
+
 
 
 echo "" >> $duration_config_file
@@ -358,6 +360,7 @@ echo "training_epochs  : ${epoch_num}" >> $acoustic_config_file
 echo "lab_dim : ${acoustic_lab_dim}" >> $acoustic_config_file
 echo "hidden_dim : ${acoustic_hidden_dim}" >> $acoustic_config_file
 echo "model_prefix : ${acoustic_model_prefix}" >> $acoustic_config_file
+echo "pretrain_prefix : ${pretrain_acoustic_model_prefix}" >> $acoustic_config_file
 
 echo "" >> $acoustic_config_file
 echo "[Streams]" >> $acoustic_config_file

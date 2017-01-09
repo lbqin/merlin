@@ -650,6 +650,7 @@ def do_train(cfg, var_file_dict, norm_info_file, model_dir, nnets_file_name, tra
     hidden_dim = cfg.hidden_dim
     n_epoch = cfg.training_epochs
     model_prefix = cfg.model_prefix
+    pretrain_prefix = cfg.pretrain_prefix
     var_dict = load_covariance(var_file_dict, cfg.out_dimension_dict)
     logger.info('training DNN')
     fid = open(norm_info_file, 'rb')
@@ -678,7 +679,7 @@ def do_train(cfg, var_file_dict, norm_info_file, model_dir, nnets_file_name, tra
             n_outs = cfg.cmp_dim
             input_dim = n_ins
             output_dim = n_outs
-            model_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, model_prefix)
+            model_dnn = MxnetTTs(input_dim, output_dim, hidden_dim, batch_size, n_epoch, model_prefix, pretrain_prefix)
             train_dataiter_all = TTSIter(x_file_list=train_x_file_list, y_file_list=train_y_file_list, n_ins=n_ins,
                                          n_outs=n_outs, batch_size=batch_size, sequential=sequential_training, shuffle=True)
             val_dataiter_all = TTSIter(x_file_list=valid_x_file_list, y_file_list=valid_y_file_list, n_ins=n_ins,
@@ -744,7 +745,6 @@ def do_generate(cfg, gen_dir, gen_file_id_list, test_x_file_list, nnets_file_nam
 
     if cfg.framework == 'mxnet':
         prefix = '%s-%04d-%03d' % (cfg.model_prefix, cfg.hidden_dim, cfg.training_epochs)
-        print prefix
         model_dnn = mx.model.FeedForward.load(prefix, 0)
         dnn_generation_mxnet(test_x_file_list, model_dnn, cfg.lab_dim, cfg.cmp_dim, gen_file_list)
     else:
@@ -807,8 +807,8 @@ def main_function(cfg):
     ####prepare environment
     try:
         file_id_list = read_file_list(cfg.file_id_scp)
-        if len(file_id_list) > 100:
-            file_id_list = file_id_list[0:100]
+        #if len(file_id_list) > 100:
+        #    file_id_list = file_id_list[0:100]
         random.seed(281638)
         random.shuffle(file_id_list)
         total_num = len(file_id_list)

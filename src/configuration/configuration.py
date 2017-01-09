@@ -238,6 +238,7 @@ class configuration(object):
             ('lab_dim', 500, 'Architecture', 'lab_dim'),
             ('hidden_dim', 512, 'Architecture', 'hidden_dim'),
             ('model_prefix', 'duration', 'Architecture', 'model_prefix'),
+            ('pretrain_prefix', 'duration', 'Architecture', 'pretrain_prefix'),
 
 	    ## some config variables for token projection DNN
             ('scheme'               , 'stagewise'                   , 'Architecture', 'scheme'),

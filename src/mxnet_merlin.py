@@ -22,7 +22,7 @@ class SimpleLRScheduler(mx.lr_scheduler.LRScheduler):
 
 
 class MxnetTTs():
-    def __init__(self, input_dim, output_dim, hidden_dim, batch_size, n_epoch, output_type):
+    def __init__(self, input_dim, output_dim, hidden_dim, batch_size, n_epoch, output_type, pretrain_name = ""):
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
         logging.basicConfig(level=logging.DEBUG)
@@ -31,6 +31,7 @@ class MxnetTTs():
         self.hidden_dim = hidden_dim
         self.n_epoch = n_epoch
         self.output_type = output_type
+        self.pretrain_name = pretrain_name
         self.batch_size = batch_size
         self.network = self.get_net(self.input_dim, self.output_dim, self.hidden_dim)
         print self.network.list_arguments()
@@ -84,13 +85,13 @@ class MxnetTTs():
         mod = None
         batch_end_callbacks = [mx.callback.Speedometer(self.batch_size, 512), ]
 
-        use_pretrain = True
         prefix = '%s-%04d-%03d' % (self.output_type, self.hidden_dim, self.n_epoch)
+        if self.pretrain_name != "":
+            use_pretrain = True
 
         if use_pretrain:
             logging.info('loading checkpoint')
-            pretrain_name = self.output_type
-            sym, arg_params, aux_params = mx.model.load_checkpoint(pretrain_name, 0)
+            sym, arg_params, aux_params = mx.model.load_checkpoint(self.pretrain_name, 0)
             mod = mx.mod.Module(sym, label_names=('label',), context=devs)
             mod.bind(data_shapes=train_dataiter.provide_data, label_shapes=train_dataiter.provide_label, for_training=True)
             mod.set_params(arg_params=arg_params, aux_params=aux_params)
@@ -170,7 +171,7 @@ class MxnetTTs():
                 logging.info('Epoch[%d] !!! LR decay: %g => %g', i_epoch,
                              lr.dynamic_lr, lr.dynamic_lr / float(2.0))
 
-                lr.dynamic_lr /= 2.0
+                lr.dynamic_lr *= 0.9
                 # we reset the optimizer because the internal states (e.g. momentum)
                 # might already be exploded, so we want to start from fresh
                 reset_optimizer()
