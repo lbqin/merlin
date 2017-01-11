@@ -95,7 +95,7 @@ class LabelCppmary(object):
         totalMat = io_funcs.file2matrix(orig_file)
         self.label_dimension = totalMat.shape[1] - 5  # collum num
         labelMat = totalMat[:, :-5]
-        print orig_file, totalMat.shape, labelMat.shape
+        #print orig_file, totalMat.shape, labelMat.shape
 
         io_funcs.array_to_binary_file(labelMat, output_file)
 
@@ -156,7 +156,7 @@ class LabelCppmary(object):
 
         label_feature_matrix = label_feature_matrix[0:label_feature_index, ]
 
-        print label_feature_matrix.shape
+        #print label_feature_matrix.shape
 
         io_funcs.array_to_binary_file(label_feature_matrix, output_file)
         #fid = open(output_file, 'w')

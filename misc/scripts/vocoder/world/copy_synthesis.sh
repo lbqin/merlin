@@ -1,6 +1,6 @@
 
 # top merlin directory
-merlin_dir="/afs/inf.ed.ac.uk/group/cstr/projects/phd/s1432486/work/Merlin/Github_version/merlin"
+merlin_dir="/home/sooda/speech/merlin"
 
 # tools directory
 world="${merlin_dir}/tools/WORLD/build"
@@ -29,7 +29,7 @@ mkdir -p ${lf0_dir}
 mkdir -p ${resyn_dir}
 
 # initializations
-fs=16000
+fs=48000
 
 if [ "$fs" -eq 16000 ]
 then

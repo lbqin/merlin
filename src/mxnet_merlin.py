@@ -83,9 +83,11 @@ class MxnetTTs():
         initializer = mx.init.Xavier(factor_type="in", magnitude=2.34)
 
         mod = None
-        batch_end_callbacks = [mx.callback.Speedometer(self.batch_size, 512), ]
+        batch_end_callbacks = [mx.callback.Speedometer(self.batch_size, self.batch_size * 4), ]
 
         prefix = '%s-%04d-%03d' % (self.output_type, self.hidden_dim, self.n_epoch)
+
+        use_pretrain = False
         if self.pretrain_name != "":
             use_pretrain = True
 
@@ -243,7 +245,7 @@ class TTSIter(mx.io.DataIter):
         self.n_ins = n_ins
         self.n_outs = n_outs
         self.batch_size = batch_size
-        self.buffer_size = 8192
+        self.buffer_size = 2048
         self.sequential = sequential
         self.output_type = output_type
         self.buffer_size = int(self.buffer_size / self.batch_size) * batch_size
