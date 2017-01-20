@@ -396,8 +396,13 @@ if [ $isTrain -gt 0 ]; then
         echo "NORMCMP  : False" >> $acoustic_config_file
     else
         echo "NORMLAB  : True" >> $acoustic_config_file
-        echo "MAKECMP  : True" >> $acoustic_config_file
-        echo "NORMCMP  : True" >> $acoustic_config_file
+        if [ $prepare_cmp -eq 0 ]; then
+            echo "MAKECMP  : False" >> $acoustic_config_file
+            echo "NORMCMP  : False" >> $acoustic_config_file
+        else
+            echo "MAKECMP  : True" >> $acoustic_config_file
+            echo "NORMCMP  : True" >> $acoustic_config_file
+        fi
     fi
     echo "" >> $acoustic_config_file
     echo "TRAINDNN : True" >> $acoustic_config_file
