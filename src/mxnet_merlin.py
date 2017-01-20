@@ -76,6 +76,7 @@ class MxnetTTs():
         clip_gradient = 5.0
         weight_decay = 0.0001
         momentum = 0.9
+        lr_factor = 0.9
         warmup_momentum = 0.3
         devs = mx.gpu()
         #lr = mx.lr_scheduler.FactorScheduler(step=step, factor=.9, stop_factor_lr=stop_factor_lr)
@@ -124,7 +125,7 @@ class MxnetTTs():
             # mod.init_optimizer(optimizer=optimizer)
         reset_optimizer()
         warmup_epoch = 10
-        last_acc = -float("Inf")
+        last_acc = float("Inf")
         for i_epoch in range(self.n_epoch):
             tic = time.time()
             metric.reset()
@@ -171,21 +172,20 @@ class MxnetTTs():
                 logging.info('Epoch[%d] !!! Dev set performance drops, reverting this epoch',
                              i_epoch)
                 logging.info('Epoch[%d] !!! LR decay: %g => %g', i_epoch,
-                             lr.dynamic_lr, lr.dynamic_lr / float(2.0))
+                             lr.dynamic_lr, lr.dynamic_lr * lr_factor)
 
-                lr.dynamic_lr *= 0.9
+                lr.dynamic_lr *= lr_factor
+                if lr.dynamic_lr < stop_factor_lr:
+                    lr.dynamic_lr = stop_factor_lr
                 # we reset the optimizer because the internal states (e.g. momentum)
                 # might already be exploded, so we want to start from fresh
                 reset_optimizer()
                 mod.set_params(*last_params)
-            else:
+            elif curr_acc < last_acc:
                 last_params = mod.get_params()
                 last_acc = curr_acc
                 # save checkpoints
                 mx.model.save_checkpoint(prefix , 0, mod.symbol, *last_params)
-
-            #last_params = mod.get_params()
-            #mx.model.save_checkpoint(self.output_type, i_epoch, mod.symbol, *last_params)
 
     def train(self, train_dataiter, val_dataiter):
         train_dataiter.reset()
