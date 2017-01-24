@@ -1,3 +1,4 @@
+# Global compiled file
 *.pyc
 .idea
 build
@@ -8,3 +9,17 @@ deep_result
 *.json
 *.params
 conf
+
+# Auto generated conf
+egs/**/conf/*
+!egs/**/conf/dnn
+!egs/**/conf/logging_config.conf
+
+# Running part
+experiments/
+*data*
+
+# Tools
+SPTK*
+build/
+bin/

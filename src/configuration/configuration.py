@@ -193,12 +193,13 @@ class configuration(object):
 
 
 
-            ('label_style', 'HTS'   , 'Labels', 'label_style'),
-            ('label_type', 'state_align'   , 'Labels', 'label_type'),
-            ('in_label_align_dir', os.path.join(self.work_dir, 'data/label_state_align')  ,    'Labels', 'label_align'),
-            ('question_file_name', os.path.join(self.work_dir, 'data/questions.hed')      ,    'Labels', 'question_file_name'),
-            ('silence_pattern'   , ['*-#+*']                                              ,    'Labels', 'silence_pattern'),
-            ('subphone_feats', 'full'   , 'Labels', 'subphone_feats'),
+            ('label_style'        , 'HTS'                                                 ,    'Labels', 'label_style'),
+            ('label_type'         , 'state_align'                                         ,    'Labels', 'label_type'),
+            ('in_label_align_dir' , os.path.join(self.work_dir, 'data/label_state_align') ,    'Labels', 'label_align'),
+            ('question_file_name' , os.path.join(self.work_dir, 'data/questions.hed')     ,    'Labels', 'question_file_name'),
+            ('silence_pattern'    , ['*-#+*']                                             ,    'Labels', 'silence_pattern'),
+            ('subphone_feats'     , 'full'                                                ,    'Labels', 'subphone_feats'),
+            ('additional_features', {}                                                    ,    'Labels', 'additional_features'),
 
             ('xpath_file_name',      os.path.join(self.work_dir, 'data/xml_labels/xpaths.txt'), 'Labels', 'xpath_file_name'),
 
@@ -224,9 +225,9 @@ class configuration(object):
             ('log_file', '', 'Paths','log_file'),
             ('log_config_file', 'configuration/exampleloggingconfigfile.conf', 'Paths', 'log_config_file'),
 
-            ('sptk_bindir', 'tools/SPTK-3.7/bin', 'Paths','sptk'),
-            ('straight_bindir', 'tools/straight/bin', 'Paths','straight'),
-            ('world_bindir', 'tools/WORLD/build', 'Paths','world'),
+            ('sptk_bindir', 'tools/bin/SPTK-3.9', 'Paths','sptk'),
+            ('straight_bindir', 'tools/bin/straight', 'Paths','straight'),
+            ('world_bindir', 'tools/bin/WORLD', 'Paths','world'),
             ('mlsa', 'tools/mlsa', 'Paths', 'mlsa'),
 
             ('network_type'           , 'RNN'                                           , 'Architecture', 'network_type'),
@@ -446,6 +447,8 @@ class configuration(object):
                 exec('self.%s = bool(%s)'  % (variable,value))
             elif type(default) == list:
                 exec('self.%s = list(%s)'  % (variable,value))
+            elif type(default) == dict:
+                exec('self.%s = dict(%s)'  % (variable,value))
             else:
                 logger.critical('Variable %s has default value of unsupported type %s',variable,type(default))
                 raise Exception('Internal error in configuration settings: unsupported default type')
@@ -881,6 +884,4 @@ class configuration(object):
             except IOError:
                 logger.critical('could not configure logging: perhaps log file path is wrong?')
                 sys.exit(1)
-
-
 

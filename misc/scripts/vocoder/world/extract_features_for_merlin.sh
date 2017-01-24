@@ -4,8 +4,8 @@
 merlin_dir="/home/sooda/speech/merlin"
 
 # tools directory
-world="${merlin_dir}/tools/WORLD/build"
-sptk="${merlin_dir}/tools/SPTK-3.7/bin"
+world="${merlin_dir}/tools/bin/WORLD"
+sptk="${merlin_dir}/tools/bin/SPTK-3.9"
 
 # input audio directory
 wav_dir="/home/sooda/data/tts/ehh_48k/wav"
@@ -42,8 +42,8 @@ nFFTHalf=2048
 alpha=0.77
 fi
 
+#bap order depends on sampling freq.
 mcsize=59
-order=24
 
 for file in $wav_dir/*.wav #.wav
 do
