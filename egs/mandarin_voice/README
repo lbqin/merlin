@@ -19,3 +19,4 @@ Directory
 ------------------------------------
 Each subdirectory of this directory contains the scripts for a sequence of experiments.
   s1: To run mandarin_voice with WORLD vocoder
+  s2: To run mandarin_voice with own voice data, lables from MTTS
