@@ -1,5 +1,8 @@
 #!/bin/bash
 
+label_ivector=0
+prepare_cmp=1
+
 if test "$#" -ne 2; then
     echo "Usage: ./scripts/prepare_config_files.sh conf/global_settings.cfg 0/1"
     exit 1
@@ -49,7 +52,12 @@ echo "" >> $duration_config_file
 echo "# list of file basenames, training and validation in a single list" >> $duration_config_file
 echo "file_id_list: %(data)s/${FileIDList}" >> $duration_config_file
 if [ $isTrain -eq 0 ]; then
-    echo "test_id_list: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/test_id_list.scp" >> $duration_config_file
+    #echo "test_id_list: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/test_id_list.scp" >> $duration_config_file
+    if [ ${label_ivector} -eq 0 ]; then
+	echo "test_id_list: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/test_id_list.scp" >> $duration_config_file
+    else
+	echo "test_id_list: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/test_id_list_adapt.scp" >> $duration_config_file
+    fi
 fi
 
 echo "" >> $duration_config_file
@@ -73,13 +81,24 @@ echo "" >> $duration_config_file
 echo "[Labels]" >> $duration_config_file
 
 echo "" >> $duration_config_file
+if [ $remove_silence -eq 0 ]; then
+    echo "remove_silence : False" >> $duration_config_file
+    echo "silence_feature_index : ${silence_feature_index}" >> $duration_config_file
+else
+    echo "remove_silence : True" >> $duration_config_file
+    echo "silence_feature_index : ${silence_feature_index}" >> $duration_config_file
+fi
 echo "silence_pattern : ['*-sil+*']" >> $duration_config_file
 echo "label_type : ${Labels}" >> $duration_config_file
 echo "label_style: cppmary" >> $duration_config_file
 if [ $isTrain -gt 0 ]; then
     echo "label_align: %(TOPLEVEL)s/experiments/${Voice}/duration_model/data/lab" >> $duration_config_file
 else
-    echo "label_align: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/prompt-lab" >> $duration_config_file
+    if [ ${label_ivector} -eq 0 ]; then
+	echo "label_align: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/prompt-lab" >> $duration_config_file
+    else
+	echo "label_align: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/prompt-lab_adapt" >> $duration_config_file
+    fi
 fi
 
 echo "question_file_name  : %(Merlin)s/misc/questions/${QuestionFile}" >> $duration_config_file
@@ -108,7 +127,13 @@ if [ $isTrain -eq 0 ]; then
     echo "" >> $duration_config_file
     echo "[Waveform]" >> $duration_config_file
     echo "" >> $duration_config_file
-    echo "test_synth_dir :  %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/gen-lab" >> $duration_config_file
+    #echo "test_synth_dir :  %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/gen-lab" >> $duration_config_file
+
+    if [ ${label_ivector} -eq 0 ]; then
+	echo "test_synth_dir: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/gen-lab" >> $duration_config_file
+    else
+	echo "test_synth_dir: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/gen-lab_adapt" >> $duration_config_file
+    fi
 fi
 
 echo "" >> $duration_config_file
@@ -133,7 +158,7 @@ echo "lab_dim : ${duration_lab_dim}" >> $duration_config_file
 echo "hidden_dim : ${duration_hidden_dim}" >> $duration_config_file
 echo "model_prefix : ${duration_model_prefix}" >> $duration_config_file
 echo "pretrain_prefix : ${pretrain_duration_model_prefix}" >> $duration_config_file
-
+echo "label_ivector : ${label_ivector}" >> $duration_config_file
 
 
 echo "" >> $duration_config_file
@@ -224,7 +249,12 @@ echo "" >> $acoustic_config_file
 echo "# list of file basenames, training and validation in a single list" >> $acoustic_config_file
 echo "file_id_list: %(data)s/${FileIDList}" >> $acoustic_config_file
 if [ $isTrain -eq 0 ]; then
-    echo "test_id_list: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/test_id_list.scp" >> $acoustic_config_file
+    #echo "test_id_list: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/test_id_list.scp" >> $acoustic_config_file
+    if [ ${label_ivector} -eq 0 ]; then
+	echo "test_id_list: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/test_id_list.scp" >> $acoustic_config_file
+    else
+	echo "test_id_list: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/test_id_list_adapt.scp" >> $acoustic_config_file
+    fi
 fi
 
 echo "" >> $acoustic_config_file
@@ -257,6 +287,9 @@ then
 elif [ "$Vocoder" == "WORLD" ]
 then
     echo "world: %(Merlin)s/tools/bin/WORLD" >> $acoustic_config_file
+elif [ "$Vocoder" == "WORLD_v3" ]
+then
+    echo "WORLD_v3: %(Merlin)s/tools/bin/WORLD_v3" >> $acoustic_config_file
 else
     echo "This vocoder ($Vocoder) is not supported as of now...please configure yourself!!"
 fi
@@ -268,13 +301,25 @@ echo "" >> $acoustic_config_file
 if [ $isTrain -eq 0 ]; then
     echo "enforce_silence : True" >> $acoustic_config_file
 fi
+if [ $remove_silence -eq 0 ]; then
+    echo "remove_silence : False" >> $acoustic_config_file
+    echo "silence_feature_index : ${silence_feature_index}" >> $acoustic_config_file
+else
+    echo "remove_silence : True" >> $acoustic_config_file
+    echo "silence_feature_index : ${silence_feature_index}" >> $acoustic_config_file
+fi
 echo "silence_pattern : ['*-sil+*']" >> $acoustic_config_file
 echo "label_type : ${Labels}" >> $acoustic_config_file
 echo "label_style: cppmary" >> $acoustic_config_file
 if [ $isTrain -gt 0 ]; then
     echo "label_align: %(TOPLEVEL)s/experiments/${Voice}/acoustic_model/data/lab" >> $acoustic_config_file
 else
-    echo "label_align: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/gen-lab" >> $acoustic_config_file
+    #echo "label_align: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/gen-lab" >> $acoustic_config_file
+    if [ ${label_ivector} -eq 0 ]; then
+	echo "label_align: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/gen-lab" >> $acoustic_config_file
+    else
+	echo "label_align: %(TOPLEVEL)s/experiments/${Voice}/test_synthesis/gen-lab_adapt" >> $acoustic_config_file
+    fi
 fi
 echo "question_file_name  : %(Merlin)s/misc/questions/${QuestionFile}" >> $acoustic_config_file
 
@@ -361,6 +406,7 @@ echo "lab_dim : ${acoustic_lab_dim}" >> $acoustic_config_file
 echo "hidden_dim : ${acoustic_hidden_dim}" >> $acoustic_config_file
 echo "model_prefix : ${acoustic_model_prefix}" >> $acoustic_config_file
 echo "pretrain_prefix : ${pretrain_acoustic_model_prefix}" >> $acoustic_config_file
+echo "label_ivector : ${label_ivector}" >> $acoustic_config_file
 
 echo "" >> $acoustic_config_file
 echo "[Streams]" >> $acoustic_config_file
@@ -408,7 +454,7 @@ if [ $isTrain -gt 0 ]; then
     echo "TRAINDNN : True" >> $acoustic_config_file
     echo "DNNGEN   : True" >> $acoustic_config_file
     echo "" >> $acoustic_config_file
-    echo "GENWAV   : True" >> $acoustic_config_file
+    echo "GENWAV   : False" >> $acoustic_config_file
     echo "CALMCD   : True" >> $acoustic_config_file
     echo "" >> $acoustic_config_file
     echo "" >> $acoustic_config_file

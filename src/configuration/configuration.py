@@ -262,6 +262,8 @@ class configuration(object):
             ('enforce_silence', False, 'Labels', 'enforce_silence'),
             ('remove_silence_using_binary_labels', False, 'Labels', 'remove_silence_using_binary_labels'),
             ('remove_silence_using_hts_labels', True, 'Labels', 'remove_silence_using_hts_labels'),
+            ('remove_silence', False, 'Labels', 'remove_silence'),
+            ('silence_feature_index', 0, 'Labels', 'silence_feature_index'),
 
             ('precompile_xpaths', True, 'Labels', 'precompile_xpaths'),
             ('iterate_over_frames', True, 'Labels', 'iterate_over_frames'),
@@ -366,8 +368,9 @@ class configuration(object):
             ('mean_log_det',        -100.0                        , 'Architecture', 'mean_log_det'),
             ('start_from_trained_model',  '_'                     , 'Architecture', 'start_from_trained_model'),
             ('use_rprop',           0                             , 'Architecture', 'use_rprop'),
-            ('use_lhuc',           False                             , 'Architecture', 'use_lhuc'),
+            ('use_lhuc',           False                          , 'Architecture', 'use_lhuc'),
             ('freeze_layers',      0                              , 'Architecture', 'freeze_layers'),
+            ('label_ivector',      0                              , 'Architecture', 'label_ivector'),
 
             ('mgc_dim' ,60     ,'Outputs','mgc'),
             ('dmgc_dim',60 * 3 ,'Outputs','dmgc'),

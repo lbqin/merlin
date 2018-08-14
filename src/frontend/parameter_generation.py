@@ -44,7 +44,7 @@ FAST_MLPG = True
 
 from io_funcs.binary_io import  BinaryIOCollection
 import os, re, numpy
-import logging
+import logging, sys
 
 if FAST_MLPG:
     from .mlpg_fast import MLParameterGenerationFast as MLParameterGeneration
@@ -54,13 +54,17 @@ else:
 
 class   ParameterGeneration(object):
 
-    def __init__(self, gen_wav_features = ['mgc', 'lf0', 'bap'], enforce_silence=False):
+    def __init__(self, gen_wav_features = ['mgc', 'lf0', 'bap'], enforce_silence=False, silence_feature_index = -1):
         self.gen_wav_features = gen_wav_features
         self.enforce_silence  = enforce_silence
 
         # Debug:
         self.inf_float = -1.0e+10
         #self.inf_float = -50000
+        self.vuv = 0.6
+        self.silence_feature_index = silence_feature_index
+        logger = logging.getLogger('param_generation')
+        logger.info('vuv processing: vuv = %0.2f' % (self.vuv))
 
         # not really necessary to have the logger rembered in the class - can easily obtain it by name instead
         # self.logger = logging.getLogger('param_generation')
@@ -169,16 +173,16 @@ class   ParameterGeneration(object):
                 logger.debug(' feature dimensions: %d by %d' %(gen_features.shape[0], gen_features.shape[1]))
 
                 if feature_name in ['lf0', 'F0']:
-                    if 'vuv' in stream_start_index:
+                    if stream_start_index.has_key('vuv'):
                         vuv_feature = features[:, stream_start_index['vuv']:stream_start_index['vuv']+1]
 
-                        for i in range(frame_number):
-                            if vuv_feature[i, 0] < 0.6 or gen_features[i, 0] < numpy.log(20):
+                        for i in xrange(frame_number):
+                            if vuv_feature[i, 0] < self.vuv or gen_features[i, 0] < numpy.log(20):
                                 gen_features[i, 0] = self.inf_float
 
                 new_file_name = os.path.join(dir_name, file_id + file_extension_dict[feature_name])
 
-                if self.enforce_silence:
+                if self.enforce_silence and self.silence_feature_index < 0:
                     silence_pattern = cfg.silence_pattern
                     label_align_dir = cfg.in_label_align_dir
                     in_f = open(label_align_dir+'/'+file_id+'.lab','r')
@@ -200,6 +204,17 @@ class   ParameterGeneration(object):
                                 gen_features[start_time:end_time, :] = self.inf_float
                             else:
                                 gen_features[start_time:end_time, :] = 0.0
+                elif self.enforce_silence and self.silence_feature_index >= 0:
+                    logger.debug('enforce setting f0 to 0 in the sil phone position')
+                    label_silence_index = self.silence_feature_index
+                    label_dir = cfg.nn_label_dir
+                    label_file = label_dir + "/" + file_id + '.lab'
+                    lab_mat = io_funcs.load_binary_file(label_file, cfg.lab_dim)
+                    silence_indexs = lab_mat[:, label_silence_index] > 0
+                    if feature_name in ['lf0', 'F0', 'mag']:
+                        gen_features[silence_indexs] = self.inf_float
+                    else:
+                        gen_features[silence_indexs] = 0.0
 
                 io_funcs.array_to_binary_file(gen_features, new_file_name)
                 logger.debug(' wrote to file %s' % new_file_name)
