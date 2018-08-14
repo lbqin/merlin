@@ -286,6 +286,7 @@ class configuration(object):
             ('hmpd_bindir'    , 'tools/bin/hmpd'        , 'Paths', 'hmpd'),
             ('magphase_bindir', 'tools/bin/magphase/src', 'Paths', 'magphase'),
             ('mlsa'           , 'tools/mlsa'            , 'Paths', 'mlsa'),
+            ('world_v3_bindir', 'tools/bin/WORLD_v3'    , 'Paths', 'world_v3'),
 
             ('network_type'           , 'RNN'                                           , 'Architecture', 'network_type'),
             ('model_type'           , 'DNN'                                             , 'Architecture', 'model_type'),
@@ -613,6 +614,10 @@ class configuration(object):
             'SYNTHESIS'     : os.path.join(self.hmpd_bindir, 'synthesis.py'),
            }
 
+        self.WORLD_v3 = {
+            'WORLDSYNTHESIS': os.path.join(self.world_v3_bindir, 'worldSynthesis'),
+            'WORLDANALYSIS': os.path.join(self.world_v3_bindir, 'worldAnalysis'),
+        }
 
         # set input extension same as output for voice conversion
         if self.VoiceConversion:

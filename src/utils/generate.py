@@ -348,6 +348,34 @@ def wavgen_mlsa_vocoder(gen_dir, file_id_list, cfg, logger):
         print(mlsa_cmd)
         run_process(mlsa_cmd)
 
+def wavgen_world_v3_vocoder(gen_dir, file_id_list, cfg, logger):
+
+    SPTK = cfg.SPTK
+    WORLD_v3= cfg.WORLD_v3
+    pf_coef = cfg.pf_coef
+
+    counter = 1
+    max_counter = len(file_id_list)
+    for filename in file_id_list:
+        logger.info('creating waveform for %4d of %4d: %s' % (counter, max_counter, filename))
+        counter = counter + 1
+        base = filename
+        files = {'sp': base + cfg.sp_ext,
+                 'mgc': base + cfg.mgc_ext,
+                 'f0': base + '.f0',
+                 'lf0': base + cfg.lf0_ext,
+                 'ap': base + '.ap',
+                 'bap': base + cfg.bap_ext,
+                 'wav': base + '.wav'}
+
+        os.chdir(gen_dir)
+
+        run_process('{synworld} {lf0} {mgc} {bap} {wav} {sr} {mgcsize} {bapsize} {alpha} {beta} 0'
+                    .format(synworld=WORLD_v3['WORLDSYNTHESIS'], lf0=files['lf0'], mgc=files['mgc'],
+                            bap=files['bap'],
+                            wav=files['wav'], sr=cfg.sr, mgcsize=cfg.mgc_dim, bapsize=cfg.bap_dim, alpha=cfg.fw_alpha,
+                            beta=pf_coef - 1))
+
 
 def generate_wav(gen_dir, file_id_list, cfg):
 
@@ -365,9 +393,9 @@ def generate_wav(gen_dir, file_id_list, cfg):
     elif cfg.vocoder_type == 'mlsa':
         wavgen_mlsa_vocoder(gen_dir, file_id_list, cfg, logger)
 
-    # ## world_v3 Vocoder:
-    # elif cfg.vocoder_type == 'WORLD_v3':
-    #     wavgen_world_v3_vocoder(gen_dir, file_id_list, cfg, logger)
+    ## world_v3 Vocoder:
+    elif cfg.vocoder_type == 'WORLD_v3':
+        wavgen_world_v3_vocoder(gen_dir, file_id_list, cfg, logger)
 
     # Add your favorite vocoder here.
 
