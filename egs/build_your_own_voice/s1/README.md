@@ -1,48 +1,74 @@
-Download Merlin
----------------
-
-git clone https://github.com/CSTR-Edinburgh/merlin.git
-
-Setup
------
-
-To setup voice: 
-
-./01_setup.sh give_a_voice_name
-
-Prepare Data
-------------
-
-To derive labels, use alignment scripts provided below: <br/>
-a) state_align - https://github.com/CSTR-Edinburgh/merlin/tree/master/misc/scripts/alignment/state_align <br/>
-b) phone_align - https://github.com/CSTR-Edinburgh/merlin/tree/master/misc/scripts/alignment/phone_align
-
-Then, chose the vocoder: <br/>
-a) STRAIGHT - extracts 60-dim MGC, 25-dim BAP, 1-dim LF0 <br/>
-b) WORLD    - extracts 60-dim MGC, variable-dim BAP, 1-dim LF0 <br/>
-            - BAP dim (1 for 16Khz, 5 for 48Khz)  <br/>
-c) WORLD_v2 - extracts 60-dim MGC, 5-dim BAP, 1-dim LF0 <br/>
-
-To derive acousitc features, use vocoder scripts provided below: <br/>
-a) STRAIGHT - https://github.com/CSTR-Edinburgh/merlin/blob/master/misc/scripts/vocoder/straight/extract_features_for_merlin.sh <br/>
-b) WORLD    - https://github.com/CSTR-Edinburgh/merlin/blob/master/misc/scripts/vocoder/world/extract_features_for_merlin.sh <br/>
-c) WORLD_v2 - https://github.com/CSTR-Edinburgh/merlin/blob/master/misc/scripts/vocoder/world_v2/extract_features_for_merlin.sh <br/>
-
-Run below script for instructions:
-./02_prepare_data.sh
-
-Run Merlin
-----------
-
-Once after setup, use below script to create acoustic, duration models and perform final test synthesis:
-
-./03_run_merlin.sh
+# Build your own voice
 
 
-Generate new sentences
-----------------------
+## Requirements
 
-To generate new sentences, please follow [steps] (https://github.com/CSTR-Edinburgh/merlin/issues/28) in below script:
+You need to have installed:
+* [Merlin](https://github.com/CSTR-Edinburgh/merlin#installation)
+* festival: ```bash tools/compile_other_speech_tools.sh```
+* htk: ```bash tools/compile_htk.sh```
 
-./04_merlin_synthesis.sh
+
+## Building Steps
+
+To build your own voice, `cd egs/build_your_own_voice/s1` and follow the below steps:
+
+### Setting up
+
+The first step is to run setup as it creates directories and some text files for testing.
+
+The next steps demonstrate on how to setup voice. 
+
+```sh
+./01_setup.sh my_voice
+```
+
+It also creates a global config file: `conf/global_settings.cfg`, where default settings are stored.
+You need to modify these params as per your own data.
+
+### Prepare labels
+
+To prepare labels
+```sh
+./02_prepare_labels.sh <path_to_wav_dir> <path_to_text_dir> <path_to_labels_dir>
+```
+
+### Prepare acoustic features
+ 
+To prepare acoustic features
+```sh
+./03_prepare_acoustic_features.sh <path_to_wav_dir> <path_to_feat_dir>
+```
+
+### Prepare config files
+
+At this point, we have to prepare two config files to train DNN models
+- Acoustic Model
+- Duration Model
+
+To prepare config files:
+```sh
+./04_prepare_conf_files.sh conf/global_settings.cfg
+```
+Four config files will be generated: two for training, and two for testing. 
+
+### Train duration model
+
+To train duration model:
+```sh
+./05_train_duration_model.sh <path_to_duration_conf_file>
+```
+
+### Train acoustic model
+
+To train acoustic model:
+```sh
+./06_train_acoustic_model.sh <path_to_acoustic_conf_file>
+```
+### Synthesize speech
+
+To synthesize speech:
+```sh
+./07_run_merlin.sh <path_to_text_dir> <path_to_test_dur_conf_file> <path_to_test_synth_conf_file>
+```
 

@@ -1,17 +1,26 @@
-#!/bin/sh
+#!/bin/bash
+
+if test "$#" -ne 4; then
+    echo "Usage: "
+    echo "bash extract_features_for_merlin.sh <path_to_merlin_dir> <path_to_wav_dir> <path_to_feat_dir> <sampling frequency>"
+    exit 1
+fi
 
 # top merlin directory
-merlin_dir="/home/sooda/speech/merlin"
+merlin_dir=$1
+
+# input audio directory
+wav_dir=$2
+
+# Output features directory
+out_dir=$3
+
+# initializations
+fs=$4
 
 # tools directory
 world="${merlin_dir}/tools/bin/WORLD"
 sptk="${merlin_dir}/tools/bin/SPTK-3.9"
-
-# input audio directory
-wav_dir="/home/sooda/data/tts/ehh_48k/wav"
-
-# Output features directory
-out_dir="/tmp/acoustic_data_world"
 
 sp_dir="${out_dir}/sp"
 mgc_dir="${out_dir}/mgc"
@@ -27,13 +36,22 @@ mkdir -p ${bap_dir}
 mkdir -p ${f0_dir}
 mkdir -p ${lf0_dir}
 
-# initializations
-fs=48000
-
 if [ "$fs" -eq 16000 ]
 then
 nFFTHalf=1024 
 alpha=0.58
+fi
+
+if [ "$fs" -eq 22050 ]
+then
+nFFTHalf=1024 
+alpha=0.65
+fi
+
+if [ "$fs" -eq 44100 ]
+then
+nFFTHalf=2048
+alpha=0.76
 fi
 
 if [ "$fs" -eq 48000 ]

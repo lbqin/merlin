@@ -34,7 +34,7 @@ class MxnetTTs():
         self.pretrain_name = pretrain_name
         self.batch_size = batch_size
         self.network = self.get_net(self.input_dim, self.output_dim, self.hidden_dim)
-        print self.network.list_arguments()
+        print(self.network.list_arguments())
 
 
     def get_net(self, input_dim, output_dim, hidden_dim):
@@ -313,7 +313,7 @@ class TTSIter(mx.io.DataIter):
             batch_size = self.batch_size
             temp_train_set_x, temp_train_set_y = self.load_one_partition()
             n_train_batches = temp_train_set_x.shape[0] / batch_size
-            print 'load data... %d', temp_train_set_x.shape[0]
+            print('load data... %d', temp_train_set_x.shape[0])
             for index in xrange(n_train_batches):
                 # print data_value.shape, temp_train_set_x.shape
                 data_value[:] = temp_train_set_x[index*batch_size : (index+1)*batch_size]
@@ -652,16 +652,16 @@ def prepare_acoustic_data(lab_dim, cmp_dim):
     nn_label_norm_dir = os.path.join(label_data_dir, 'nn_no_silence_lab_norm_' + str(lab_dim))
     nn_cmp_norm_dir = os.path.join(data_dir, 'nn_norm' + combined_feature_name + '_' + str(cmp_dim))
 
-    print file_id_list[0]
+    print(file_id_list[0])
     nn_label_norm_file_list = prepare_file_path_list(file_id_list, nn_label_norm_dir, ".lab")
-    print file_id_list[0],nn_label_norm_file_list[0]
+    print(file_id_list[0], nn_label_norm_file_list[0])
     nn_cmp_norm_file_list = prepare_file_path_list(file_id_list, nn_cmp_norm_dir, ".cmp")
-    print file_id_list[0], nn_cmp_norm_file_list[0]
+    print(file_id_list[0], nn_cmp_norm_file_list[0])
     train_x_file_list = nn_label_norm_file_list[0:train_file_number]
     valid_x_file_list = nn_label_norm_file_list[train_file_number:train_file_number + valid_file_number]
     train_y_file_list = nn_cmp_norm_file_list[0:train_file_number]
     valid_y_file_list = nn_cmp_norm_file_list[train_file_number:train_file_number + valid_file_number]
-    print train_y_file_list[0], valid_y_file_list[0]
+    print(train_y_file_list[0], valid_y_file_list[0])
     return train_x_file_list, valid_x_file_list, train_y_file_list, valid_y_file_list
 
 
@@ -679,7 +679,7 @@ def dnn_generation_mxnet(valid_file_list, dnn_model, n_ins, n_outs, out_file_lis
         predicted_parameter = dnn_model.predict(test_set_x)
         ### write to cmp file
         predicted_parameter = np.array(predicted_parameter, 'float32')
-        print features.shape, predicted_parameter.shape
+        print(features.shape, predicted_parameter.shape)
         temp_parameter = predicted_parameter
         fid = open(out_file_list[i], 'wb')
         predicted_parameter.tofile(fid)
@@ -687,7 +687,7 @@ def dnn_generation_mxnet(valid_file_list, dnn_model, n_ins, n_outs, out_file_lis
         fid.close()
 
 def test(val_dataiter, model_prefix, num_epochs):
-    print "test..."
+    print("test...")
     model_test = mx.model.FeedForward.load(model_prefix, num_epochs)
     #preds,data,label = model_test.predict(val_dataiter, 10, return_data=True)
     preds = []
@@ -709,9 +709,9 @@ def test(val_dataiter, model_prefix, num_epochs):
 
     preds = model_test.predict(data)
     for i in xrange(preds.shape[0]):
-        print preds[i, 0:5]
-        print label[i, 0:5]
-        print "........."
+        print(preds[i, 0:5])
+        print(label[i, 0:5])
+        print(".........")
 
 
     #for feats in data:

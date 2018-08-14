@@ -40,7 +40,7 @@
 from io_funcs.binary_io import BinaryIOCollection
 import numpy
 import logging
-from acoustic_base import AcousticBase
+from .acoustic_base import AcousticBase
 import os
 #io_funcs.
 import Queue
@@ -78,7 +78,7 @@ class   AcousticComposition(AcousticBase):
 
         utt_number = len(in_file_list)
 
-        for i in xrange(utt_number):
+        for i in range(utt_number):
             in_file_name = in_file_list[i]
             in_data_stream_name = in_file_name.split('.')[-1]
             in_feature_dim = in_dimension_dict[in_data_stream_name]
@@ -153,8 +153,9 @@ class   AcousticComposition(AcousticBase):
             try:
                 assert out_frame_number == frame_number
             except AssertionError:
-                logger.critical('the frame number of data stream %s is not consistent with others: current %d others %d'
-                                % (data_stream_name, out_frame_number, frame_number))
+                logger.critical(
+                    'the frame number of data stream %s is not consistent with others: current %d others %d'
+                    % (data_stream_name, out_frame_number, frame_number))
                 raise
 
             dim_index = stream_start_index[data_stream_name]
@@ -180,10 +181,10 @@ class   AcousticComposition(AcousticBase):
                 out_data_matrix[0:out_frame_number, dim_index:dim_index + in_feature_dim] = acc_features
             ### write data to file
             io_funcs.array_to_binary_file(out_data_matrix, out_file_name)
-            #logger.debug(' wrote %d frames of features', out_frame_number)
 
+            # logger.debug(' wrote %d frames of features', out_frame_number)
 
-    def prepare_data(self, in_file_list_dict, out_file_list, in_dimension_dict, out_dimension_dict):
+    def prepare_data_mt(self, in_file_list_dict, out_file_list, in_dimension_dict, out_dimension_dict):
         self.queueLock = multiprocessing.Lock()
         self.workQueue = multiprocessing.Queue(len(out_file_list))
         self.threads = [multiprocessing.Process(target=self.compose_worker) for i in range(4)]
@@ -204,12 +205,88 @@ class   AcousticComposition(AcousticBase):
         while not self.workQueue.empty():
             pass
 
-        #time.sleep(5)
-        #for t in self.threads:
+        # time.sleep(5)
+        # for t in self.threads:
         #    t.terminate()
 
         for t in self.threads:
             t.join(timeout=None)
+
+    def prepare_data(self, in_file_list_dict, out_file_list, in_dimension_dict, out_dimension_dict):
+
+        logger = logging.getLogger("acoustic_comp")
+
+        stream_start_index = {}
+        stream_dim_index = 0
+        for stream_name in list(out_dimension_dict.keys()):
+            if stream_name not in stream_start_index:
+                stream_start_index[stream_name] = stream_dim_index
+
+            stream_dim_index += out_dimension_dict[stream_name]
+
+        io_funcs = BinaryIOCollection()
+
+        for i in range(self.file_number):
+            out_file_name = out_file_list[i]
+
+            # if os.path.isfile(out_file_name):
+            #    logger.info('processing file %4d of %4d : %s exists' % (i+1, self.file_number, out_file_name))
+            #    continue
+
+            logger.info('processing file %4d of %4d : %s' % (i + 1, self.file_number, out_file_name))
+
+            out_data_matrix = None
+            out_frame_number = 0
+
+            for k in range(self.data_stream_number):
+                data_stream_name = self.data_stream_list[k]
+                in_file_name = in_file_list_dict[data_stream_name][i]
+                in_feature_dim = in_dimension_dict[data_stream_name]
+                features, frame_number = io_funcs.load_binary_file_frame(in_file_name, in_feature_dim)
+
+                if k == 0:
+                    out_frame_number = frame_number
+                    out_data_matrix = numpy.zeros((out_frame_number, self.out_dimension))
+
+                if frame_number > out_frame_number:
+                    features = features[0:out_frame_number, ]
+                    frame_number = out_frame_number
+
+                try:
+                    assert out_frame_number == frame_number
+                except AssertionError:
+                    logger.critical(
+                        'the frame number of data stream %s is not consistent with others: current %d others %d'
+                        % (data_stream_name, out_frame_number, frame_number))
+                    raise
+
+                dim_index = stream_start_index[data_stream_name]
+
+                if data_stream_name in ['lf0', 'F0']:  ## F0 added for GlottHMM
+                    features, vuv_vector = self.interpolate_f0(features)
+
+                    ### if vuv information to be recorded, store it in corresponding column
+                    if self.record_vuv:
+                        out_data_matrix[0:out_frame_number,
+                        stream_start_index['vuv']:stream_start_index['vuv'] + 1] = vuv_vector
+
+                out_data_matrix[0:out_frame_number, dim_index:dim_index + in_feature_dim] = features
+                dim_index = dim_index + in_feature_dim
+
+                if self.compute_dynamic[data_stream_name]:
+                    delta_features = self.compute_dynamic_matrix(features, self.delta_win, frame_number,
+                                                                 in_feature_dim)
+                    acc_features = self.compute_dynamic_matrix(features, self.acc_win, frame_number, in_feature_dim)
+
+                    out_data_matrix[0:out_frame_number, dim_index:dim_index + in_feature_dim] = delta_features
+                    dim_index = dim_index + in_feature_dim
+
+                    out_data_matrix[0:out_frame_number, dim_index:dim_index + in_feature_dim] = acc_features
+
+            ### write data to file
+            io_funcs.array_to_binary_file(out_data_matrix, out_file_name)
+
+            logger.debug(' wrote %d frames of features', out_frame_number)
 
     def acoustic_decomposition(self, in_file_list, out_dimension_dict, file_extension_dict):
 
@@ -217,7 +294,7 @@ class   AcousticComposition(AcousticBase):
         dimension_index = 0
         recorded_vuv = False
         vuv_dimension = None
-        for feature_name in out_dimension_dict.keys():
+        for feature_name in list(out_dimension_dict.keys()):
             if feature_name != 'vuv':
                 stream_start_index[feature_name] = dimension_index
             else:
@@ -229,7 +306,6 @@ class   AcousticComposition(AcousticBase):
         for file_name in in_file_list:
             dir_name = os.path.dirname(file_name)
             file_id = os.path.splitext(os.path.basename(file_name))[0]
-
 
 if __name__ == '__main__':
 
@@ -251,4 +327,3 @@ if __name__ == '__main__':
     out_file_list = ['/afs/inf.ed.ac.uk/group/project/dnn_tts/herald_001.cmp', '/afs/inf.ed.ac.uk/group/project/dnn_tts/herald_002.cmp']
 
     acoustic_cmper.prepare_nn_data(in_file_list_dict, out_file_list, in_dimension_dict, out_dimension_dict)
-

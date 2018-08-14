@@ -23,3 +23,6 @@ experiments/
 SPTK*
 build/
 bin/
+
+# Pycharm IDE
+.idea/

@@ -47,17 +47,20 @@ import os, re, numpy
 import logging
 
 if FAST_MLPG:
-    from mlpg_fast import MLParameterGenerationFast as MLParameterGeneration
+    from .mlpg_fast import MLParameterGenerationFast as MLParameterGeneration
 #    pass
 else:
-    from mlpg import MLParameterGeneration
+    from .mlpg import MLParameterGeneration
 
 class   ParameterGeneration(object):
 
     def __init__(self, gen_wav_features = ['mgc', 'lf0', 'bap'], enforce_silence=False):
         self.gen_wav_features = gen_wav_features
         self.enforce_silence  = enforce_silence
+
+        # Debug:
         self.inf_float = -1.0e+10
+        #self.inf_float = -50000
 
         # not really necessary to have the logger rembered in the class - can easily obtain it by name instead
         # self.logger = logging.getLogger('param_generation')
@@ -72,11 +75,11 @@ class   ParameterGeneration(object):
 
         state_number = 5  ## hard coding, try removing in future?
 
-        if len(out_dimension_dict.keys())>1:
+        if len(list(out_dimension_dict.keys()))>1:
             logger.critical("we don't support any additional features along with duration as of now.")
             sys.exit(1)
         else:
-            feature_name = out_dimension_dict.keys()[0]
+            feature_name = list(out_dimension_dict.keys())[0]
 
         io_funcs = BinaryIOCollection()
 
@@ -116,7 +119,7 @@ class   ParameterGeneration(object):
         recorded_vuv = False
         vuv_dimension = None
 
-        for feature_name in out_dimension_dict.keys():
+        for feature_name in list(out_dimension_dict.keys()):
 #            if feature_name != 'vuv':
             stream_start_index[feature_name] = dimension_index
 #            else:
@@ -158,7 +161,7 @@ class   ParameterGeneration(object):
                 if do_MLPG == False:
                     gen_features = current_features
                 else:
-                    gen_features = mlpg_algo.generation(current_features, var, out_dimension_dict[feature_name]/3)
+                    gen_features = mlpg_algo.generation(current_features, var, out_dimension_dict[feature_name]//3)
 #                else:
 #                    self.logger.critical("the dimensions do not match for MLPG: %d vs %d" %(var.shape[1], out_dimension_dict[feature_name]))
 #                    raise
@@ -166,11 +169,11 @@ class   ParameterGeneration(object):
                 logger.debug(' feature dimensions: %d by %d' %(gen_features.shape[0], gen_features.shape[1]))
 
                 if feature_name in ['lf0', 'F0']:
-                    if stream_start_index.has_key('vuv'):
+                    if 'vuv' in stream_start_index:
                         vuv_feature = features[:, stream_start_index['vuv']:stream_start_index['vuv']+1]
 
-                        for i in xrange(frame_number):
-                            if vuv_feature[i, 0] < 0.6:
+                        for i in range(frame_number):
+                            if vuv_feature[i, 0] < 0.6 or gen_features[i, 0] < numpy.log(20):
                                 gen_features[i, 0] = self.inf_float
 
                 new_file_name = os.path.join(dir_name, file_id + file_extension_dict[feature_name])
@@ -193,7 +196,7 @@ class   ParameterGeneration(object):
                         label_binary_flag = self.check_silence_pattern(full_label, silence_pattern)
 
                         if label_binary_flag:
-                            if feature_name in ['lf0', 'F0']:
+                            if feature_name in ['lf0', 'F0', 'mag']:
                                 gen_features[start_time:end_time, :] = self.inf_float
                             else:
                                 gen_features[start_time:end_time, :] = 0.0
@@ -205,7 +208,7 @@ class   ParameterGeneration(object):
     def load_covariance(self, var_file_dict, out_dimension_dict):
 
         io_funcs = BinaryIOCollection()
-        for feature_name in var_file_dict.keys():
+        for feature_name in list(var_file_dict.keys()):
             var_values, dimension = io_funcs.load_binary_file_frame(var_file_dict[feature_name], 1)
 
             var_values = numpy.reshape(var_values, (out_dimension_dict[feature_name], 1))

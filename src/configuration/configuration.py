@@ -39,10 +39,14 @@
 
 
 import math
-import ConfigParser
+import sys
+if sys.version_info.major >= 3:
+    import configparser
+else:
+    import ConfigParser as configparser
 import os
 import logging
-import StringIO
+import io
 import sys
 import textwrap
 import datetime
@@ -66,7 +70,7 @@ class configuration(object):
         # because we haven't loaded it yet!
         #
         # so, just use simple console-only logging
-        logger.setLevel(logging.DEBUG) # this level is hardwired here - should change it to INFO
+        logger.setLevel(logging.INFO) # this level is hardwired here - should change it to INFO
         # add a handler & its formatter - will write only to console
         ch = logging.StreamHandler()
         logger.addHandler(ch)
@@ -116,8 +120,8 @@ class configuration(object):
 
         # load the config file
         try:
-            configparser = ConfigParser.ConfigParser()
-            configparser.readfp(open(configFile))
+            cfgparser = configparser.ConfigParser()
+            cfgparser.readfp(open(configFile))
             logger.debug('successfully read and parsed user configuration file %s' % configFile)
         except:
             logger.fatal('error reading user configuration file %s' % configFile)
@@ -129,9 +133,9 @@ class configuration(object):
 
         if self.work_dir == None:
             try:
-                self.work_dir = configparser.get('Paths', 'work')
+                self.work_dir = cfgparser.get('Paths', 'work')
 
-            except (ConfigParser.NoSectionError, ConfigParser.NoOptionError):
+            except (configparser.NoSectionError, configparser.NoOptionError):
                 if self.work_dir == None:
                     logger.critical('Paths:work has no value!')
                     raise Exception
@@ -139,6 +143,16 @@ class configuration(object):
         # look for those items that are user-configurable, and get their values
         # sptk_bindir= ....
 
+        # default place for some data
+        self.data_dir       = os.path.join(self.work_dir, 'data')
+        self.inter_data_dir = os.path.join(self.work_dir, 'inter_module')
+
+        self.gen_dir     = os.path.join(self.work_dir, 'gen')
+        self.model_dir   = os.path.join(self.work_dir, 'nnets_model')
+        self.stats_dir   = os.path.join(self.work_dir, 'stats')
+
+        self.def_inp_dir    = os.path.join(self.inter_data_dir, 'nn_no_silence_lab_norm_425')
+        self.def_out_dir    = os.path.join(self.inter_data_dir, 'nn_norm_mgc_lf0_vuv_bap_187')
 
 
         # a list instead of a dict because OrderedDict is not available until 2.7
@@ -157,8 +171,17 @@ class configuration(object):
         user_options = [
 
             ('work_dir', self.work_dir, 'Paths','work'),
-            ('data_dir', '', 'Paths','data'),
+            ('data_dir', self.data_dir, 'Paths','data'),
+            ('inter_data_dir', self.inter_data_dir, 'Paths','inter_data'),
             ('plot_dir', '', 'Paths','plot'),
+
+            ('inp_feat_dir', self.def_inp_dir, 'Paths', 'inp_feat'),
+            ('out_feat_dir', self.def_out_dir, 'Paths', 'out_feat'),
+
+            ('model_dir', self.model_dir, 'Paths', 'models'),
+            ('stats_dir', self.stats_dir, 'Paths', 'stats'),
+            ('gen_dir'  ,   self.gen_dir, 'Paths', 'gen'),
+            ('pred_feat_dir',self.gen_dir, 'Paths', 'pred_feat'),
 
             ('plot',      False, 'Utility', 'plot'),
             ('profile',   False, 'Utility', 'profile'),
@@ -175,12 +198,36 @@ class configuration(object):
             ('in_sp_dir'    , os.path.join(self.work_dir, 'data/sp' )  , 'Paths', 'in_sp_dir'),
             ('in_seglf0_dir', os.path.join(self.work_dir, 'data/lf03') , 'Paths', 'in_seglf0_dir'),
 
-	    ## for glottHMM
+            ## for glottHMM:
             ('in_F0_dir'   , os.path.join(self.work_dir, 'data/F0')  , 'Paths', 'in_F0_dir'),
             ('in_Gain_dir'   , os.path.join(self.work_dir, 'data/Gain')  , 'Paths', 'in_Gain_dir'),
             ('in_HNR_dir'   , os.path.join(self.work_dir, 'data/HNR')  , 'Paths', 'in_HNR_dir'),
             ('in_LSF_dir'   , os.path.join(self.work_dir, 'data/LSF')  , 'Paths', 'in_LSF_dir'),
             ('in_LSFsource_dir'   , os.path.join(self.work_dir, 'data/LSFsource')  , 'Paths', 'in_LSFsource_dir'),
+
+            ## for glottDNN:
+            ('in_f0_dir'   , os.path.join(self.work_dir, 'data/f0')  , 'Paths', 'in_f0_dir'),
+            ('in_gain_dir'   , os.path.join(self.work_dir, 'data/gain')  , 'Paths', 'in_gain_dir'),
+            ('in_hnr_dir'   , os.path.join(self.work_dir, 'data/hnr')  , 'Paths', 'in_hnr_dir'),
+            ('in_lsf_dir'   , os.path.join(self.work_dir, 'data/lsf')  , 'Paths', 'in_lsf_dir'),
+            ('in_slsf_dir'   , os.path.join(self.work_dir, 'data/slsf')  , 'Paths', 'in_slsf_dir'),
+
+            ## for sinusoidal:
+            ('in_pdd_dir'   , os.path.join(self.work_dir, 'data/pdd')  , 'Paths', 'in_pdd_dir'),
+
+            ## For MagPhase Vocoder:
+            ('in_acous_feats_dir' , os.path.join(self.work_dir, 'data/in_acoustic_feats'), 'Paths', 'in_acous_feats_dir'),
+            ('nat_wav_dir'        , os.path.join(self.work_dir, 'data/nat_wavs')         , 'Paths', 'nat_wav_dir'), # Containg natural speech waveforms (for acous feat extraction).
+
+            # Input-Output
+            ('inp_dim', 425, 'Input-Output', 'inp_dim'),
+            ('out_dim', 187, 'Input-Output', 'out_dim'),
+
+            ('inp_file_ext', '.lab', 'Input-Output', 'inp_file_ext'),
+            ('out_file_ext', '.cmp', 'Input-Output', 'out_file_ext'),
+
+            ('inp_norm', 'MINMAX', 'Input-Output', 'inp_norm'),
+            ('out_norm', 'MINMAX', 'Input-Output', 'out_norm'),
 
             ## for joint duration
             ('in_seq_dur_dir' , os.path.join(self.work_dir, 'data/S2S_dur')  , 'Paths', 'in_seq_dur_dir'),
@@ -197,9 +244,13 @@ class configuration(object):
             ('label_type'         , 'state_align'                                         ,    'Labels', 'label_type'),
             ('in_label_align_dir' , os.path.join(self.work_dir, 'data/label_state_align') ,    'Labels', 'label_align'),
             ('question_file_name' , os.path.join(self.work_dir, 'data/questions.hed')     ,    'Labels', 'question_file_name'),
+            ('linguistic_file_name' , os.path.join(self.work_dir, 'data/hed_feats.txt')   ,    'Labels', 'linguistic_file_name'),
             ('silence_pattern'    , ['*-#+*']                                             ,    'Labels', 'silence_pattern'),
             ('subphone_feats'     , 'full'                                                ,    'Labels', 'subphone_feats'),
             ('additional_features', {}                                                    ,    'Labels', 'additional_features'),
+
+            ## For MagPhase Vocoder:
+            #('label_align_orig_const_rate_dir', os.path.join(self.work_dir, 'data/label_state_align'), 'Labels', 'label_align_orig_const_rate'),
 
             ('xpath_file_name',      os.path.join(self.work_dir, 'data/xml_labels/xpaths.txt'), 'Labels', 'xpath_file_name'),
 
@@ -210,6 +261,8 @@ class configuration(object):
 
             ('enforce_silence', False, 'Labels', 'enforce_silence'),
             ('remove_silence_using_binary_labels', False, 'Labels', 'remove_silence_using_binary_labels'),
+            ('remove_silence_using_hts_labels', True, 'Labels', 'remove_silence_using_hts_labels'),
+
             ('precompile_xpaths', True, 'Labels', 'precompile_xpaths'),
             ('iterate_over_frames', True, 'Labels', 'iterate_over_frames'),
 
@@ -225,23 +278,32 @@ class configuration(object):
             ('log_file', '', 'Paths','log_file'),
             ('log_config_file', 'configuration/exampleloggingconfigfile.conf', 'Paths', 'log_config_file'),
 
-            ('sptk_bindir', 'tools/bin/SPTK-3.9', 'Paths','sptk'),
-            ('straight_bindir', 'tools/bin/straight', 'Paths','straight'),
-            ('world_bindir', 'tools/bin/WORLD', 'Paths','world'),
-            ('mlsa', 'tools/mlsa', 'Paths', 'mlsa'),
+            ('sptk_bindir'    , 'tools/bin/SPTK-3.9'    , 'Paths', 'sptk'),
+            ('straight_bindir', 'tools/bin/straight'    , 'Paths', 'straight'),
+            ('world_bindir'   , 'tools/bin/WORLD'       , 'Paths', 'world'),
+            ('glotthmm_bindir', 'tools/bin/glotthmm'    , 'Paths', 'glotthmm'),
+            ('glottdnn_bindir', 'tools/bin/glottdnn'    , 'Paths', 'glottdnn'),
+            ('hmpd_bindir'    , 'tools/bin/hmpd'        , 'Paths', 'hmpd'),
+            ('magphase_bindir', 'tools/bin/magphase/src', 'Paths', 'magphase'),
+            ('mlsa'           , 'tools/mlsa'            , 'Paths', 'mlsa'),
 
             ('network_type'           , 'RNN'                                           , 'Architecture', 'network_type'),
             ('model_type'           , 'DNN'                                             , 'Architecture', 'model_type'),
             ('hidden_layer_type'    , ['TANH', 'TANH', 'TANH', 'TANH', 'TANH', 'TANH']  , 'Architecture', 'hidden_layer_type'),
             ('output_layer_type'    , 'LINEAR'                                          , 'Architecture', 'output_layer_type'),
-            ('sequential_training'  , False                                           , 'Architecture', 'sequential_training'),
+            ('sequential_training'  , False                                             , 'Architecture', 'sequential_training'),
+            ('rnn_batch_training'   , False                                             , 'Architecture', 'rnn_batch_training'),
             ('dropout_rate'         , 0.0                                               , 'Architecture', 'dropout_rate'),
+
             ('lab_dim', 500, 'Architecture', 'lab_dim'),
             ('hidden_dim', 512, 'Architecture', 'hidden_dim'),
             ('model_prefix', 'duration', 'Architecture', 'model_prefix'),
             ('pretrain_prefix', 'duration', 'Architecture', 'pretrain_prefix'),
 
-	    ## some config variables for token projection DNN
+            ('switch_to_keras'      , False                                             , 'Architecture', 'switch_to_keras'),
+            ('switch_to_tensorflow' , False                                             , 'Architecture', 'switch_to_tensorflow'),
+
+            ## some config variables for token projection DNN
             ('scheme'               , 'stagewise'                   , 'Architecture', 'scheme'),
             ('index_to_project'    , 0       , 'Architecture', 'index_to_project'),
             ('projection_insize'    , 10000        , 'Architecture', 'projection_insize'),
@@ -251,8 +313,36 @@ class configuration(object):
             ('layers_with_projection_input'    , [0], 'Architecture', 'layers_with_projection_input'),
             ('projection_learning_rate_scaling'    , 1.0, 'Architecture', 'projection_learning_rate_scaling'),
 
+            ('num_of_epochs',   1, 'Architecture', 'training_epochs'),
+
+            ('optimizer'        ,   'sgd', 'Architecture', 'optimizer'),
+            ('loss_function'    ,    'mse', 'Architecture', 'loss_function'),
+
+            # RNN
+            ('model_file_name'    , 'feed_forward_6_tanh','Architecture', 'model_file_name'),
+            ('stateful'           , False, 'Architecture', 'stateful'),
+            ('use_high_batch_size', False, 'Architecture', 'use_high_batch_size'),
+
+            ('training_algo',   1, 'Architecture', 'training_algo'),
+            ('merge_size'   ,   1, 'Architecture', 'merge_size'),
+            ('seq_length'   , 200, 'Architecture', 'seq_length'),
+            ('bucket_range' , 100, 'Architecture', 'bucket_range'),
+
+            ('encoder_decoder'      , False                                           ,  'Architecture','encoder_decoder'),
+            ('attention'            , False                                           ,  'Architecture', 'attention'),
+            ("cbhg"                 , False                                           ,   "Architecture", "cbhg"),
+            
+            # Data
+            ('shuffle_data', True, 'Data', 'shuffle_data'),
+
+            # Keras Processes
+            ('NORMDATA'  , False, 'Processes', 'NORMDATA'),
+            ('TRAINMODEL', False, 'Processes', 'TRAINMODEL'),
+            ('TESTMODEL' , False, 'Processes', 'TESTMODEL'),
+
 
             ('learning_rate'        , 0.0002                          , 'Architecture', 'learning_rate'),
+            ('lr_decay'             , -1                              , 'Architecture', 'lr_decay'),
             ('l2_reg'               , 0.00001                      , 'Architecture', 'L2_regularization'),
             ('l1_reg'               , 0.0                           , 'Architecture', 'L1_regularization'),
             ('batch_size'           , 16                            , 'Architecture', 'batch_size'),
@@ -275,7 +365,8 @@ class configuration(object):
             ('mean_log_det',        -100.0                        , 'Architecture', 'mean_log_det'),
             ('start_from_trained_model',  '_'                     , 'Architecture', 'start_from_trained_model'),
             ('use_rprop',           0                             , 'Architecture', 'use_rprop'),
-
+            ('use_lhuc',           False                             , 'Architecture', 'use_lhuc'),
+            ('freeze_layers',      0                              , 'Architecture', 'freeze_layers'),
 
             ('mgc_dim' ,60     ,'Outputs','mgc'),
             ('dmgc_dim',60 * 3 ,'Outputs','dmgc'),
@@ -292,8 +383,7 @@ class configuration(object):
             ('acc_win'          , [1.0, -2.0, 1.0]  , 'Outputs', 'acc_win'),
             ('do_MLPG'          , True              , 'Outputs', 'do_MLPG'),
 
-
-	    ## for GlottHMM
+            ## for GlottHMM:
             ('F0_dim' ,1     ,'Outputs','F0'),
             ('dF0_dim',1 * 3 ,'Outputs','dF0'),
             ('Gain_dim' ,1     ,'Outputs','Gain'),
@@ -305,12 +395,37 @@ class configuration(object):
             ('LSFsource_dim' ,10     ,'Outputs','LSFsource'),
             ('dLSFsource_dim',10 * 3 ,'Outputs','dLSFsource'),
 
+            ## for GlottDNN:
+             ('f0_dim' ,1     ,'Outputs','f0'),
+            ('df0_dim',1 * 3 ,'Outputs','df0'),
+            ('gain_dim' ,1     ,'Outputs','gain'),
+            ('dgain_dim',1 * 3 ,'Outputs','dgain'),
+            ('hnr_dim' ,5     ,'Outputs','hnr'),
+            ('dhnr_dim',5 * 3 ,'Outputs','dhnr'),
+            ('lsf_dim' ,30     ,'Outputs','lsf'),
+            ('dlsf_dim',30 * 3 ,'Outputs','dlsf'),
+            ('slsf_dim' ,10     ,'Outputs','slsf'),
+            ('dslsf_dim',10 * 3 ,'Outputs','dslsf'),
+        
+            ## for sinusoidal:
+            ('pdd_dim', 25, 'Outputs', 'pdd'),
+            ('dpdd_dim', 25 * 3, 'Outputs', 'dpdd'),
+
+            ## For MagPhase Vocoder:
+            ('mag_dim'  , 60    , 'Outputs', 'mag'),
+            ('dmag_dim' , 60 * 3, 'Outputs', 'dmag'),
+            ('real_dim' , 45    , 'Outputs', 'real'),
+            ('dreal_dim', 45 * 3, 'Outputs', 'dreal'),
+            ('imag_dim' , 45    , 'Outputs', 'imag'),
+            ('dimag_dim', 45 * 3, 'Outputs', 'dimag'),
+
         ## for joint dur:-
             ('seq_dur_dim' ,1     ,'Outputs','seq_dur'),
             ('remove_silence_from_dur'  , True  , 'Outputs', 'remove_silence_from_dur'),
             ('dur_dim' ,5     ,'Outputs','dur'),
             ('dur_feature_type' , 'numerical' , 'Outputs', 'dur_feature_type'),
-
+            ('dur_unit_size' , 'phoneme' , 'Outputs', 'dur_unit_size'),
+            ('dur_feat_size' , 'phoneme' , 'Outputs', 'dur_feat_size'),
 
             ('output_feature_normalisation', 'MVN', 'Outputs', 'output_feature_normalisation'),
 
@@ -319,48 +434,6 @@ class configuration(object):
 
             ('output_features' , ['mgc','lf0', 'vuv', 'bap'], 'Streams', 'output_features'),
             ('gen_wav_features', ['mgc', 'bap', 'lf0']      , 'Streams', 'gen_wav_features'),
-
-#            ('stream_mgc_hidden_size'   ,  192 , 'Streams', 'stream_mgc_hidden_size'),
-#            ('stream_lf0_hidden_size'   ,  32  , 'Streams', 'stream_lf0_hidden_size'),
-#            ('stream_vuv_hidden_size'   ,  32  , 'Streams', 'stream_vuv_hidden_size'),
-#            ('stream_bap_hidden_size'   ,  128 , 'Streams', 'stream_bap_hidden_size'),
-#            ('stream_stepw_hidden_size' ,  64  , 'Streams', 'stream_stepw_hidden_size'),
-#            ('stream_seglf0_hidden_size',  64  , 'Streams', 'stream_seglf0_hidden_size'),
-#            ('stream_cmp_hidden_size'   ,  256 , 'Streams', 'stream_cmp_hidden_size'),  #when multi-stream is disabled, use this to indicate the final hidden layer size
-                                                                                        #if this is also not provided, use the top common hidden layer size
-
-            ## Glott HMM -- dummy values -- haven't used private streams:--
-#            ('stream_F0_hidden_size'   ,  192 , 'Streams', 'stream_F0_hidden_size'),
-#            ('stream_Gain_hidden_size'   ,  192 , 'Streams', 'stream_Gain_hidden_size'),
-#            ('stream_HNR_hidden_size'   ,  192 , 'Streams', 'stream_HNR_hidden_size'),
-#            ('stream_LSF_hidden_size'   ,  192 , 'Streams', 'stream_LSF_hidden_size'),
-#            ('stream_LSFsource_hidden_size'   ,  192 , 'Streams', 'stream_LSFsource_hidden_size'),
-
-            ## joint dur -- dummy values -- haven't used private streams:--
-#            ('stream_dur_hidden_size'   ,  192 , 'Streams', 'stream_dur_hidden_size'),
-
-#            ('stream_sp_hidden_size'    , 1024, 'Streams', 'stream_sp_hidden_size'),
-
-#            ('stream_weight_mgc'   , 1.0, 'Streams', 'stream_weight_mgc'),
-#            ('stream_weight_lf0'   , 3.0, 'Streams', 'stream_weight_lf0'),
-#            ('stream_weight_vuv'   , 1.0, 'Streams', 'stream_weight_vuv'),
-#            ('stream_weight_bap'   , 1.0, 'Streams', 'stream_weight_bap'),
-#            ('stream_weight_stepw' , 0.0, 'Streams', 'stream_weight_stepw'),
-#            ('stream_weight_seglf0', 1.0, 'Streams', 'stream_weight_seglf0'),
-#            ('stream_weight_sp'    , 1.0, 'Streams', 'stream_weight_sp'),
-
-
-            ## Glott HMM - unused?
-#            ('stream_weight_F0'   , 1.0, 'Streams', 'stream_weight_F0'),
-#            ('stream_weight_Gain'   , 1.0, 'Streams', 'stream_weight_Gain'),
-#            ('stream_weight_HNR'   , 1.0, 'Streams', 'stream_weight_HNR'),
-#            ('stream_weight_LSF'   , 1.0, 'Streams', 'stream_weight_LSF'),
-#            ('stream_weight_LSFsource'   , 1.0, 'Streams', 'stream_weight_LSFsource'),
-
-            ## dur - unused?
-#            ('stream_weight_dur'   , 1.0, 'Streams', 'stream_weight_dur'),
-#            ('stream_lf0_lr'       , 0.5, 'Streams', 'stream_lf0_lr'),
-#            ('stream_vuv_lr'       , 0.5, 'Streams', 'stream_vuv_lr'),
 
             ('vocoder_type'     ,'STRAIGHT'            ,'Waveform'  , 'vocoder_type'),
             ('sr'               ,48000                 ,'Waveform'  , 'samplerate'),
@@ -376,11 +449,19 @@ class configuration(object):
             ('apply_GV'         ,False                 ,'Waveform'  , 'apply_GV'),
             ('test_synth_dir'   ,'test_synthesis/wav'  ,'Waveform'  , 'test_synth_dir'),
 
+            ## For MagPhase Vocoder:
+            #('use_magphase_pf'  ,True                 ,'Waveform'  , 'use_magphase_pf'), # Use MagPhase own Post-Filter (experimemental)
+            ('magphase_pf_type'   , ['magphase', 'no', 'merlin']  , 'Waveform', 'magphase_pf_type'),
+            ('magphase_const_rate', False                         , 'Waveform', 'magphase_const_rate'),
+
+
             ('DurationModel'        , False, 'Processes', 'DurationModel'),
             ('AcousticModel'        , False, 'Processes', 'AcousticModel'),
+            ('VoiceConversion'      , False, 'Processes', 'VoiceConversion'),
             ('GenTestList'          , False, 'Processes', 'GenTestList'),
             ('framework'            , 'theano' ,'Processes', 'framework'),
 
+            ('ACFTEXTR'        , False, 'Processes', 'ACFTEXTR'), # Acoustic feature extraction
             ('NORMLAB'         , False, 'Processes', 'NORMLAB'),
             ('MAKEDUR'         , False, 'Processes', 'MAKEDUR'),
             ('MAKECMP'         , False, 'Processes', 'MAKECMP'),
@@ -409,6 +490,21 @@ class configuration(object):
             ('LSF_ext'   , '.LSF'     , 'Extensions', 'LSF_ext'),
             ('LSFsource_ext'   , '.LSFsource'     , 'Extensions', 'LSFsource_ext'),
 
+             ## GlottDNN
+            ('f0_ext'   , '.f0'     , 'Extensions', 'f0_ext'),
+            ('gain_ext'   , '.gain'     , 'Extensions', 'gain_ext'),
+            ('hnr_ext'   , '.hnr'     , 'Extensions', 'hnr_ext'),
+            ('lsf_ext'   , '.lsf'     , 'Extensions', 'lsf_ext'),
+            ('slsf_ext'   , '.slsf'     , 'Extensions', 'slsf_ext'),
+
+            ## sinusoidal
+            ('pdd_ext'  , '.pdd', 'Extensions', 'pdd_ext'),
+
+            ## For MagPhase Vocoder:
+            ('mag_ext'   , '.mag'     , 'Extensions', 'mag_ext'),
+            ('real_ext'  , '.real'    , 'Extensions', 'real_ext'),
+            ('imag_ext'  , '.imag'    , 'Extensions', 'imag_ext'),
+
             ## joint dur
             ('dur_ext'   , '.dur'     , 'Extensions', 'dur_ext'),
 
@@ -421,10 +517,10 @@ class configuration(object):
 
             try:
                 # first, look for a user-set value for this variable in the config file
-                value = configparser.get(section,option)
+                value = cfgparser.get(section,option)
                 user_or_default='user'
 
-            except (ConfigParser.NoSectionError, ConfigParser.NoOptionError):
+            except (configparser.NoSectionError, configparser.NoOptionError):
                 # use default value, if there is one
                 if (default == None) or \
                    (default == '')   or \
@@ -435,7 +531,6 @@ class configuration(object):
                 else:
                     value = default
                     user_or_default='default'
-
 
             if   type(default) == str:
                 exec('self.%s = "%s"'      % (variable,value))
@@ -491,11 +586,7 @@ class configuration(object):
             'MC2B'   : os.path.join(self.sptk_bindir,'mc2b'),
             'B2MC'  : os.path.join(self.sptk_bindir,'b2mc')
             }
-#        self.NND = {
-#            'FEATN'  : os.path.join(self.nndata_bindir,'FeatureNormalization'),
-#            'LF0IP'  : os.path.join(self.nndata_bindir,'F0Interpolation'),
-#            'F0VUV'  : os.path.join(self.nndata_bindir,'F0VUVComposition')
-#            }
+
         self.STRAIGHT = {
             'SYNTHESIS_FFT' : os.path.join(self.straight_bindir, 'synthesis_fft'),
             'BNDAP2AP'      : os.path.join(self.straight_bindir, 'bndap2ap'),
@@ -505,11 +596,113 @@ class configuration(object):
             'SYNTHESIS'     : os.path.join(self.world_bindir, 'synth'),
             'ANALYSIS'      : os.path.join(self.world_bindir, 'analysis'),
             }
+        
+        self.GLOTTHMM= {
+            'SYNTHESIS'     : os.path.join(self.glotthmm_bindir, 'Synthesis'),
+            'config_file'   : os.path.join(self.glotthmm_bindir, 'config_default_48'),
+            'config_file_16'   : os.path.join(self.glotthmm_bindir, 'config_default_16'),
+            }
 
-        # STILL TO DO - test that all the above tools exist and are executable
+        self.GLOTTDNN = {
+            'SYNTHESIS'     : os.path.join(self.glottdnn_bindir, 'Synthesis'),         
+            'config_file'   : os.path.join(self.glottdnn_bindir, 'config_default_48'),
+            'config_file_16'   : os.path.join(self.glottdnn_bindir, 'config_default_16'),
+            }
+
+        self.HMPD = {
+            'SYNTHESIS'     : os.path.join(self.hmpd_bindir, 'synthesis.py'),
+           }
 
 
+        # set input extension same as output for voice conversion
+        if self.VoiceConversion:
+            self.remove_silence_using_hts_labels = False
+            self.lab_ext = self.cmp_ext
 
+        # check if any hidden layer is recurrent layer 
+        list_of_RNNs = ['RNN', 'LSTM', 'GRU', 'BLSTM', 'SLSTM', 'SGRU', 'BSLSTM']
+        for hidden_type in self.hidden_layer_type:
+            if hidden_type in list_of_RNNs:
+                self.sequential_training = True
+                break
+
+        # switch to tensorflow
+        if self.switch_to_tensorflow:
+            ## create directories if not exists
+            self.model_dir = os.path.join(self.model_dir, "tensorflow")
+            self.model_dir = os.path.join(self.model_dir, self.model_file_name)
+            if not os.path.exists(self.model_dir):
+                os.makedirs(self.model_dir)
+
+        # switch to keras
+        if self.switch_to_keras:
+            ## create directories if not exists
+            self.model_dir = os.path.join(self.model_dir, "keras")
+            if not os.path.exists(self.model_dir):
+                os.makedirs(self.model_dir)
+
+            # model files
+            self.json_model_file = os.path.join(self.model_dir, self.model_file_name+'.json')
+            self.h5_model_file   = os.path.join(self.model_dir, self.model_file_name+'.h5')
+
+        if self.switch_to_keras and self.switch_to_tensorflow:
+            logger.critical("Please switch to either tensorflow or keras, but not both!!")
+            sys.exit(1)
+
+        if self.switch_to_keras or self.switch_to_tensorflow:
+            if not os.path.exists(self.gen_dir):
+                os.makedirs(self.gen_dir)
+
+            # input-output normalization stat files
+            self.inp_stats_file = os.path.join(self.stats_dir, "input_%d_%s_%d.norm" %(int(self.train_file_number), self.inp_norm, self.inp_dim))
+            self.out_stats_file = os.path.join(self.stats_dir, "output_%d_%s_%d.norm" %(int(self.train_file_number), self.out_norm, self.out_dim))
+
+            # define model file name
+            logger.info('model file: %s' % (self.model_file_name))
+
+            # predicted features directory
+            self.pred_feat_dir = os.path.join(self.gen_dir, self.model_file_name)
+            if not os.path.exists(self.pred_feat_dir):
+                os.makedirs(self.pred_feat_dir)
+
+            # string.lower for some architecture values
+            self.output_layer_type = self.output_layer_type.lower()
+            self.optimizer         = self.optimizer.lower()
+            self.loss_function     = self.loss_function.lower()
+            for i in range(len(self.hidden_layer_type)):
+                self.hidden_layer_type[i] = self.hidden_layer_type[i].lower()
+
+            # force optimizer to adam if set to sgd
+            if self.optimizer == "sgd":
+                self.optimizer = 'adam'
+
+            # set sequential training True if using LSTMs
+            if 'lstm' in self.hidden_layer_type:
+                self.sequential_training = True
+
+            # set default seq length for duration model
+            if self.DurationModel and self.training_algo == 3 and self.seq_length>50:
+                self.seq_length = 20
+
+            # rnn params
+            self.rnn_params = {}
+            self.rnn_params['merge_size']   = self.merge_size
+            self.rnn_params['seq_length']   = self.seq_length
+            self.rnn_params['bucket_range'] = self.bucket_range
+            self.rnn_params['stateful']     = self.stateful
+
+    
+        ### RNN params
+        if self.sequential_training:
+            # batch training for RNNs
+            if self.batch_size>1:
+                self.rnn_batch_training = True
+
+            # set/limit batch size to 25
+            if self.batch_size>50:
+                if not self.use_high_batch_size:
+                    logger.info('reducing the batch size from %s to 25' % (self.batch_size))
+                    self.batch_size = 25 ## num. of sentences in this case
 
         ###dimensions for the output features
         ### key name must follow the self.in_dimension_dict.
@@ -554,6 +747,8 @@ class configuration(object):
                 in_dimension = self.lf0_dim
                 out_dimension = self.dlf0_dim
                 in_directory  = self.in_lf0_dir
+                if self.vocoder_type == 'MAGPHASE':
+                    in_directory = self.in_acous_feats_dir
 
 #                current_stream_hidden_size = self.stream_lf0_hidden_size
 #                current_stream_weight      = self.stream_weight_lf0
@@ -628,6 +823,58 @@ class configuration(object):
 #                current_stream_weight      = self.stream_weight_LSFsource
             ## for GlottHMM (end)
 
+            ## for GlottDNN (start)
+            elif feature_name == 'f0':
+                in_dimension = self.f0_dim
+                out_dimension = self.df0_dim
+                in_directory  = self.in_f0_dir
+
+            elif feature_name == 'gain':
+                in_dimension = self.gain_dim
+                out_dimension = self.dgain_dim
+                in_directory  = self.in_gain_dir
+
+            elif feature_name == 'hnr':
+                in_dimension = self.hnr_dim
+                out_dimension = self.dhnr_dim
+                in_directory  = self.in_hnr_dir
+
+            elif feature_name == 'lsf':
+                in_dimension = self.lsf_dim
+                out_dimension = self.dlsf_dim
+                in_directory  = self.in_lsf_dir
+
+            elif feature_name == 'slsf':
+                in_dimension = self.slsf_dim
+                out_dimension = self.dslsf_dim
+                in_directory  = self.in_slsf_dir
+            ## for GlottDNN (end)
+
+            ## for HMPD (start)
+            elif feature_name == 'pdd':
+                in_dimension = self.pdd_dim
+                out_dimension = self.dpdd_dim
+                in_directory  = self.in_pdd_dir
+            ## for HMPD (end)
+
+            ## For MagPhase Vocoder (start):
+            # Note: 'lf0' is set before. See above.
+            elif feature_name == 'mag':
+                in_dimension  = self.mag_dim
+                out_dimension = self.dmag_dim
+                in_directory  = self.in_acous_feats_dir
+
+            elif feature_name == 'real':
+                in_dimension  = self.real_dim
+                out_dimension = self.dreal_dim
+                in_directory  = self.in_acous_feats_dir
+
+            elif feature_name == 'imag':
+                in_dimension  = self.imag_dim
+                out_dimension = self.dimag_dim
+                in_directory  = self.in_acous_feats_dir
+            ## For MagPhase Vocoder (end)
+
             ## for joint dur (start)
             elif feature_name == 'dur':
                 in_dimension = self.dur_dim
@@ -689,7 +936,7 @@ class configuration(object):
 
         self.multistream_outs = []
         if self.multistream_switch:
-            for feature_name in self.out_dimension_dict.keys():
+            for feature_name in list(self.out_dimension_dict.keys()):
                 self.multistream_outs.append(self.out_dimension_dict[feature_name])
 
 #                stream_lr_ratio = 0.5
@@ -714,13 +961,28 @@ class configuration(object):
         self.file_extension_dict['cmp'] = self.cmp_ext
         self.file_extension_dict['seglf0'] = self.lf0_ext
 
-
         ## gHMM:
         self.file_extension_dict['F0'] = self.F0_ext
         self.file_extension_dict['Gain'] = self.Gain_ext
         self.file_extension_dict['HNR'] = self.HNR_ext
         self.file_extension_dict['LSF'] = self.LSF_ext
         self.file_extension_dict['LSFsource'] = self.LSFsource_ext
+
+        ## gDNN
+        self.file_extension_dict['f0'] = self.f0_ext
+        self.file_extension_dict['gain'] = self.gain_ext
+        self.file_extension_dict['hnr'] = self.hnr_ext
+        self.file_extension_dict['lsf'] = self.lsf_ext
+        self.file_extension_dict['slsf'] = self.slsf_ext
+        
+        ## HMPD
+        self.file_extension_dict['pdd'] = self.pdd_ext
+
+        ## For MagPhase Vocoder:
+        # Note: 'lf0' is set before. See above.
+        self.file_extension_dict['mag']  = self.mag_ext
+        self.file_extension_dict['real'] = self.real_ext
+        self.file_extension_dict['imag'] = self.imag_ext
 
         ## joint dur
         self.file_extension_dict['dur'] = self.dur_ext
@@ -754,12 +1016,6 @@ class configuration(object):
         self.hyper_params['warmup_epoch']          = self.warmup_epoch
         self.hyper_params['use_rprop']             = self.use_rprop
 
-#        self.hyper_params['private_hidden_sizes']  = self.private_hidden_sizes
-#        self.hyper_params['stream_weights']        = self.stream_weights
-#        self.hyper_params['private_l2_reg']        = self.private_l2_reg
-#        self.hyper_params['stream_lr_weights']     = self.stream_lr_weights
-#        self.hyper_params['use_private_hidden']    = self.use_private_hidden
-
         self.hyper_params['model_type']            = self.model_type
         self.hyper_params['hidden_layer_type']     = self.hidden_layer_type
 
@@ -773,13 +1029,9 @@ class configuration(object):
         self.hyper_params['sequential_training'] = self.sequential_training
         self.hyper_params['dropout_rate'] = self.dropout_rate
 
-        for hidden_type in self.hidden_layer_type:
-            if 'LSTM' in hidden_type or 'RNN' in hidden_type or 'GRU' in hidden_type:
-                self.hyper_params['sequential_training'] = self.sequential_training
-
 
         #To be recorded in the logging file for reference
-        for param_name in self.hyper_params.keys():
+        for param_name in list(self.hyper_params.keys()):
             logger.info('%s : %s' %(param_name, str(self.hyper_params[param_name])))
 
                 # input files
@@ -855,11 +1107,8 @@ class configuration(object):
             # inject the config lines for the file handler, now that we know the name of the file it will write to
 
             if not os.path.exists(self.log_path):
-                os.makedirs(self.log_path, 0755)
-            log_file_name = '%s_%s_%d_%d_%d_%d_%f_%s.log' %(self.combined_model_name, self.combined_feature_name, self.train_file_number,
-                                                                      self.cmp_dim, len(self.hidden_layer_size),
-                                                                      self.hidden_layer_size[-1], self.learning_rate,
-                                                                      datetime.datetime.now().strftime("%I_%M%p_%B_%d_%Y"))
+                os.makedirs(self.log_path, 0o755)
+            log_file_name = '%s_%s.log' %(self.model_file_name, datetime.datetime.now().strftime("%I_%M%p_%B_%d_%Y"))
 
             self.log_file = os.path.join(self.log_path, log_file_name)
 
@@ -876,7 +1125,9 @@ class configuration(object):
 
             try:
                 # pass that string as a filehandle
-                fh = StringIO.StringIO(config_string)
+                if sys.version_info.major < 3:
+                    config_string = unicode(config_string, "utf-8")
+                fh = io.StringIO(config_string)
                 logging.config.fileConfig(fh)
                 fh.close()
                 logger.info("logging is now fully configured")
